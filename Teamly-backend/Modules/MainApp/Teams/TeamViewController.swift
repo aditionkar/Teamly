@@ -347,7 +347,7 @@ class TeamViewController: UIViewController {
         let sportEmoji = team.sports?.emoji ?? "🏅"
         button.setTitle("\(sportEmoji)  \(team.name)", for: .normal)
         
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .regular)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 19, weight: .regular)
         button.layer.cornerRadius = 30
         button.contentHorizontalAlignment = .left
         button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 20, bottom: 0, right: 20)

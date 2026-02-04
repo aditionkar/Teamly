@@ -11,7 +11,7 @@ import Foundation
 
 // MARK: - Delegate Protocol
 protocol FiltersModalDelegate: AnyObject {
-    func didSelectFilters(skillLevels: Set<String>, timeFilters: Set<String>)
+    func didSelectFilters(skillLevels: Set<String>, timeFilters: Set<String>, isFillingFast: Bool)
 }
 
 // MARK: - Main View Controller
@@ -67,20 +67,11 @@ class MatchesViewController: UIViewController {
         return stackView
     }()
     
-    private let filterStackView: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .horizontal
-        stackView.spacing = 12
-        stackView.distribution = .fillEqually
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        return stackView
-    }()
-    
     private let matchesCollectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .vertical
-        layout.itemSize = CGSize(width: 375, height: 200)
-        layout.minimumLineSpacing = 10
+        layout.itemSize = CGSize(width: 375, height: 185)
+        layout.minimumLineSpacing = 5
         
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
@@ -128,16 +119,30 @@ class MatchesViewController: UIViewController {
         return button
     }()
     
+    // Funnel Button for filters
+    private let funnelButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.layer.cornerRadius = 20
+        button.layer.borderWidth = 1
+        
+        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+        let image = UIImage(systemName: "line.3.horizontal.decrease.circle", withConfiguration: config)
+        button.setImage(image, for: .normal)
+        
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupDates()
         setupDateChips()
-        setupFilterButtons()
         setupMatchesCollectionView()
         setupBackButton()
         setupPlusButton()
+        setupFunnelButton()
         
         // Hide collection view initially
         matchesCollectionView.isHidden = true
@@ -163,7 +168,6 @@ class MatchesViewController: UIViewController {
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
             updateColors()
             updateDateChipsForModeChange()
-            setupFilterButtons()
             matchesCollectionView.reloadData()
         }
     }
@@ -187,12 +191,12 @@ class MatchesViewController: UIViewController {
         contentView.addSubview(titleLabel)
         contentView.addSubview(dateScrollView)
         dateScrollView.addSubview(dateStackView)
-        contentView.addSubview(filterStackView)
         contentView.addSubview(matchesCollectionView)
         contentView.addSubview(noMatchesLabel)
         
         // Add buttons to main view (not content view so they stay fixed)
         view.addSubview(glassBackButton)
+        view.addSubview(funnelButton)
         view.addSubview(plusButton)
         
         setupConstraints()
@@ -215,6 +219,12 @@ class MatchesViewController: UIViewController {
             plusButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             plusButton.widthAnchor.constraint(equalToConstant: 40),
             plusButton.heightAnchor.constraint(equalToConstant: 40),
+            
+            // Funnel Button (between back and plus)
+            funnelButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            funnelButton.trailingAnchor.constraint(equalTo: plusButton.leadingAnchor, constant: -10),
+            funnelButton.widthAnchor.constraint(equalToConstant: 40),
+            funnelButton.heightAnchor.constraint(equalToConstant: 40),
             
             // Title Label
             titleLabel.topAnchor.constraint(equalTo: glassBackButton.bottomAnchor, constant: 15),
@@ -247,13 +257,8 @@ class MatchesViewController: UIViewController {
             dateStackView.bottomAnchor.constraint(equalTo: dateScrollView.bottomAnchor),
             dateStackView.heightAnchor.constraint(equalTo: dateScrollView.heightAnchor),
             
-            // Filter Stack View
-            filterStackView.topAnchor.constraint(equalTo: dateScrollView.bottomAnchor, constant: 20),
-            filterStackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            filterStackView.heightAnchor.constraint(equalToConstant: 40),
-            
             // Matches Collection View
-            matchesCollectionView.topAnchor.constraint(equalTo: filterStackView.bottomAnchor, constant: 20),
+            matchesCollectionView.topAnchor.constraint(equalTo: dateScrollView.bottomAnchor, constant: 20),
             matchesCollectionView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             matchesCollectionView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             matchesCollectionView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
@@ -300,35 +305,25 @@ class MatchesViewController: UIViewController {
         }
     }
     
-    private func updateFilterButtonsAppearance() {
+    private func updateFunnelButtonAppearance() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         
-        // Remove existing buttons
-        filterStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // Update funnel button based on active filters
+        let hasActiveFilters = !selectedSkillLevels.isEmpty || !selectedTimeFilters.isEmpty || isFillingFastFilterEnabled
         
-        let filtersButton = FilterButtonView(title: "Filters", icon: "slider.horizontal.3", isSelected: false, isDarkMode: isDarkMode)
-        
-        // If any filters are selected, show a badge
-        if !selectedSkillLevels.isEmpty || !selectedTimeFilters.isEmpty {
-            filtersButton.setColor(.systemBlue.withAlphaComponent(0.7))
-            filtersButton.isSelected = true
+        if hasActiveFilters {
+            // Active filters: show filled icon with tint
+            let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+            let image = UIImage(systemName: "line.3.horizontal.decrease.circle.fill", withConfiguration: config)
+            funnelButton.setImage(image, for: .normal)
+            funnelButton.tintColor = .systemGreen
+        } else {
+            // No active filters: show outline icon
+            let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+            let image = UIImage(systemName: "line.3.horizontal.decrease.circle", withConfiguration: config)
+            funnelButton.setImage(image, for: .normal)
+            funnelButton.tintColor = .systemGreen
         }
-        
-        let fillingFastButton = FilterButtonView(title: "Filling fast", icon: "chart.line.uptrend.xyaxis",
-                                                 isSelected: isFillingFastFilterEnabled, isDarkMode: isDarkMode, isFillingFastButton: true)
-        
-        // Add tap gesture to filters button
-        let filtersTapGesture = UITapGestureRecognizer(target: self, action: #selector(filtersButtonTapped))
-        filtersButton.addGestureRecognizer(filtersTapGesture)
-        filtersButton.isUserInteractionEnabled = true
-        
-        // Add tap gesture to filling fast button
-        let fillingFastTapGesture = UITapGestureRecognizer(target: self, action: #selector(fillingFastButtonTapped))
-        fillingFastButton.addGestureRecognizer(fillingFastTapGesture)
-        fillingFastButton.isUserInteractionEnabled = true
-        
-        filterStackView.addArrangedSubview(filtersButton)
-        filterStackView.addArrangedSubview(fillingFastButton)
     }
     
     private func fetchUserDataAndLoadMatches() {
@@ -395,7 +390,7 @@ class MatchesViewController: UIViewController {
             if isFillingFastFilterEnabled {
                 filteredDBMatches = filteredDBMatches.filter { match in
                     let fillRatio = Double(match.playersRSVPed) / Double(match.playersNeeded)
-                    return fillRatio >= 0.66 // More than 66% filled
+                    return fillRatio >= 0.66 // Show ONLY matches that are 66%+ filled (red slots)
                 }
                 print("After filling fast filter: \(filteredDBMatches.count) matches")
             }
@@ -476,32 +471,6 @@ class MatchesViewController: UIViewController {
         }
     }
     
-    private func setupFilterButtons() {
-        updateFilterButtonsAppearance()
-        let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Remove existing buttons
-        filterStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        let filtersButton = FilterButtonView(title: "Filters", icon: "slider.horizontal.3", isSelected: false, isDarkMode: isDarkMode)
-        let fillingFastButton = FilterButtonView(title: "Filling fast", icon: "chart.line.uptrend.xyaxis",
-                                                 isSelected: false, isDarkMode: isDarkMode, isFillingFastButton: true)
-        
-        // Add tap gesture to filters button
-        let filtersTapGesture = UITapGestureRecognizer(target: self, action: #selector(filtersButtonTapped))
-        filtersButton.addGestureRecognizer(filtersTapGesture)
-        filtersButton.isUserInteractionEnabled = true
-        
-        // Add tap gesture to filling fast button
-        let fillingFastTapGesture = UITapGestureRecognizer(target: self, action: #selector(fillingFastButtonTapped))
-        fillingFastButton.addGestureRecognizer(fillingFastTapGesture)
-        fillingFastButton.isUserInteractionEnabled = true
-        
-        filterStackView.addArrangedSubview(filtersButton)
-        filterStackView.addArrangedSubview(fillingFastButton)
-
-    }
-    
     private func setupMatchesCollectionView() {
         matchesCollectionView.delegate = self
         matchesCollectionView.dataSource = self
@@ -514,6 +483,10 @@ class MatchesViewController: UIViewController {
     
     private func setupPlusButton() {
         plusButton.addTarget(self, action: #selector(plusButtonTapped), for: .touchUpInside)
+    }
+    
+    private func setupFunnelButton() {
+        funnelButton.addTarget(self, action: #selector(funnelButtonTapped), for: .touchUpInside)
     }
     
     // MARK: - New method to update date chips for mode change
@@ -540,6 +513,8 @@ class MatchesViewController: UIViewController {
         
         updateGlassButton(glassBackButton, isDarkMode: isDarkMode)
         updateGlassButton(plusButton, isDarkMode: isDarkMode)
+        updateGlassButton(funnelButton, isDarkMode: isDarkMode)
+        updateFunnelButtonAppearance()
     }
     
     private func updateGlassButton(_ button: UIButton, isDarkMode: Bool) {
@@ -549,6 +524,13 @@ class MatchesViewController: UIViewController {
         button.layer.borderColor = (isDarkMode ?
             UIColor(white: 1, alpha: 0.2) :
             UIColor(white: 0, alpha: 0.1)).cgColor
+        
+        // Don't override tintColor for funnel button if it has active filters
+        if button == funnelButton && (!selectedSkillLevels.isEmpty || !selectedTimeFilters.isEmpty || isFillingFastFilterEnabled) {
+            // Keep the blue tint for active filters
+            return
+        }
+        
         button.tintColor = isDarkMode ? .systemGreenDark : .systemGreen
     }
     
@@ -576,7 +558,7 @@ class MatchesViewController: UIViewController {
         }
     }
     
-    @objc private func filtersButtonTapped() {
+    @objc private func funnelButtonTapped() {
         let modalViewController = FiltersModalViewController()
         modalViewController.modalPresentationStyle = .overCurrentContext
         modalViewController.modalTransitionStyle = .crossDissolve
@@ -584,28 +566,13 @@ class MatchesViewController: UIViewController {
         // Pass current selections to modal
         modalViewController.selectedSkillLevels = selectedSkillLevels
         modalViewController.selectedTimeFilters = selectedTimeFilters
+        modalViewController.isFillingFastEnabled = isFillingFastFilterEnabled
         
         // Set delegate
         modalViewController.delegate = self
         
         modalViewController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
         present(modalViewController, animated: true, completion: nil)
-    }
-    
-    @objc private func fillingFastButtonTapped() {
-        // Toggle the filter state
-        isFillingFastFilterEnabled.toggle()
-        
-        // Update the filter buttons appearance
-        updateFilterButtonsAppearance()
-        
-        // Show loading indicator
-        loadingIndicator.startAnimating()
-        
-        // Reload matches with the new filter state
-        Task {
-            await loadMatchesForSelectedDate()
-        }
     }
     
     @objc private func backButtonTapped() {
@@ -683,16 +650,18 @@ extension MatchesViewController: UICollectionViewDataSource, UICollectionViewDel
 
 // MARK: - FiltersModalDelegate
 extension MatchesViewController: FiltersModalDelegate {
-    func didSelectFilters(skillLevels: Set<String>, timeFilters: Set<String>) {
+    func didSelectFilters(skillLevels: Set<String>, timeFilters: Set<String>, isFillingFast: Bool) {
         // Update the filter selections
         selectedSkillLevels = skillLevels
         selectedTimeFilters = timeFilters
+        isFillingFastFilterEnabled = isFillingFast
         
         print("Selected skill levels: \(skillLevels)")
         print("Selected time filters: \(timeFilters)")
+        print("Filling fast enabled: \(isFillingFast)")
         
-        // Update the filter button appearance
-        updateFilterButtonsAppearance()
+        // Update the funnel button appearance
+        updateFunnelButtonAppearance()
         
         // Show loading indicator
         loadingIndicator.startAnimating()
@@ -713,6 +682,7 @@ class FiltersModalViewController: UIViewController {
     weak var delegate: FiltersModalDelegate?
     var selectedSkillLevels: Set<String> = []
     var selectedTimeFilters: Set<String> = []
+    var isFillingFastEnabled: Bool = false
     
     // Skill Level buttons - using FilterButtonView
     private var beginnerButton: FilterButtonView!
@@ -723,6 +693,9 @@ class FiltersModalViewController: UIViewController {
     // Time buttons - using NewStyleButtonView
     private var dayButton: NewStyleButtonView!
     private var nightButton: NewStyleButtonView!
+    
+    // Filling Fast button
+    private var fillingFastButton: FilterButtonView!
     
     // Container for the modal content (for animation)
     private let contentContainer: UIView = {
@@ -737,15 +710,15 @@ class FiltersModalViewController: UIViewController {
         updateColors()
         applyCurrentSelections()
         
-        // Start with container off-screen
-        contentContainer.transform = CGAffineTransform(translationX: 0, y: 300)
+        // Start with container completely off-screen
+        contentContainer.transform = CGAffineTransform(translationX: 0, y: view.bounds.height)
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        // Animate container sliding up
-        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+        // Animate container sliding up in one smooth animation
+        UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: .curveEaseOut) {
             self.contentContainer.transform = .identity
         }
     }
@@ -765,6 +738,10 @@ class FiltersModalViewController: UIViewController {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleOutsideTap))
         tapGesture.delegate = self
         view.addGestureRecognizer(tapGesture)
+        
+        // Add pan gesture to dismiss by sliding down
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePanGesture(_:)))
+        contentContainer.addGestureRecognizer(panGesture)
         
         view.addSubview(contentContainer)
         
@@ -846,6 +823,10 @@ class FiltersModalViewController: UIViewController {
         skillStackView2.translatesAutoresizingMaskIntoConstraints = false
         contentContainer.addSubview(skillStackView2)
         
+        // First separator
+        let separator1 = createSeparator()
+        contentContainer.addSubview(separator1)
+        
         // Time section
         let timeLabel = UILabel()
         timeLabel.text = "Time"
@@ -876,6 +857,33 @@ class FiltersModalViewController: UIViewController {
         timeStackView.translatesAutoresizingMaskIntoConstraints = false
         contentContainer.addSubview(timeStackView)
         
+        // Second separator
+        let separator2 = createSeparator()
+        contentContainer.addSubview(separator2)
+        
+        // Availability section
+        let availabilityLabel = UILabel()
+        availabilityLabel.text = "Availability"
+        availabilityLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+        availabilityLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.addSubview(availabilityLabel)
+        
+        // Filling Fast button
+        fillingFastButton = FilterButtonView(
+            title: "Filling fast",
+            icon: "chart.line.uptrend.xyaxis",
+            isSelected: isFillingFastEnabled,
+            isDarkMode: isDarkMode,
+            isFillingFastButton: true
+        )
+        fillingFastButton.setColor(.systemGreen.withAlphaComponent(0.7))
+        
+        let fillingFastStackView = UIStackView(arrangedSubviews: [fillingFastButton])
+        fillingFastStackView.axis = .horizontal
+        fillingFastStackView.distribution = .fillEqually
+        fillingFastStackView.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.addSubview(fillingFastStackView)
+        
         // Clear All Button
         let clearButton = UIButton(type: .system)
         clearButton.setTitle("Clear All", for: .normal)
@@ -891,6 +899,7 @@ class FiltersModalViewController: UIViewController {
         addTapGesture(to: advancedButton)
         addTapGesture(to: dayButton)
         addTapGesture(to: nightButton)
+        addTapGesture(to: fillingFastButton)
         
         // Constraints
         NSLayoutConstraint.activate([
@@ -924,14 +933,35 @@ class FiltersModalViewController: UIViewController {
             skillStackView2.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
             skillStackView2.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -24),
             
-            timeLabel.topAnchor.constraint(equalTo: skillStackView2.bottomAnchor, constant: 40),
+            // First separator
+            separator1.topAnchor.constraint(equalTo: skillStackView2.bottomAnchor, constant: 30),
+            separator1.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
+            separator1.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -24),
+            separator1.heightAnchor.constraint(equalToConstant: 1),
+            
+            // Time section
+            timeLabel.topAnchor.constraint(equalTo: separator1.bottomAnchor, constant: 30),
             timeLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
             
             timeStackView.topAnchor.constraint(equalTo: timeLabel.bottomAnchor, constant: 16),
             timeStackView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
             timeStackView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -24),
             
-            clearButton.topAnchor.constraint(equalTo: timeStackView.bottomAnchor, constant: 40),
+            // Second separator
+            separator2.topAnchor.constraint(equalTo: timeStackView.bottomAnchor, constant: 30),
+            separator2.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
+            separator2.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -24),
+            separator2.heightAnchor.constraint(equalToConstant: 1),
+            
+            // Availability section
+            availabilityLabel.topAnchor.constraint(equalTo: separator2.bottomAnchor, constant: 30),
+            availabilityLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
+            
+            fillingFastStackView.topAnchor.constraint(equalTo: availabilityLabel.bottomAnchor, constant: 16),
+            fillingFastStackView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 24),
+            fillingFastStackView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -24),
+            
+            clearButton.topAnchor.constraint(equalTo: fillingFastStackView.bottomAnchor, constant: 40),
             clearButton.centerXAnchor.constraint(equalTo: contentContainer.centerXAnchor),
             clearButton.heightAnchor.constraint(equalToConstant: 40),
             clearButton.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -34)
@@ -939,6 +969,12 @@ class FiltersModalViewController: UIViewController {
         
         // Update handle bar color
         updateColors()
+    }
+    
+    private func createSeparator() -> UIView {
+        let separator = UIView()
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        return separator
     }
     
     private func applyCurrentSelections() {
@@ -951,6 +987,9 @@ class FiltersModalViewController: UIViewController {
         // Apply time selections
         dayButton.isSelected = selectedTimeFilters.contains("day")
         nightButton.isSelected = selectedTimeFilters.contains("night")
+        
+        // Apply filling fast selection
+        fillingFastButton.isSelected = isFillingFastEnabled
     }
     
     private func sendSelectedFilters() {
@@ -966,7 +1005,11 @@ class FiltersModalViewController: UIViewController {
         if dayButton.isSelected { selectedTimes.insert("day") }
         if nightButton.isSelected { selectedTimes.insert("night") }
         
-        delegate?.didSelectFilters(skillLevels: selectedSkills, timeFilters: selectedTimes)
+        delegate?.didSelectFilters(
+            skillLevels: selectedSkills,
+            timeFilters: selectedTimes,
+            isFillingFast: fillingFastButton.isSelected
+        )
     }
     
     private func updateColors() {
@@ -992,11 +1035,25 @@ class FiltersModalViewController: UIViewController {
             }
         }
         
+        // Update filling fast button unselected state
+        if !fillingFastButton.isSelected {
+            fillingFastButton.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
+        }
+        
         // Update handle bar
         if let handleBar = contentContainer.subviews.first(where: { $0.constraints.contains(where: { $0.firstAttribute == .height && $0.constant == 5 }) }) {
             handleBar.backgroundColor = isDarkMode ?
                 UIColor.white.withAlphaComponent(0.3) :
                 UIColor.black.withAlphaComponent(0.2)
+        }
+        
+        // Update separators
+        for subview in contentContainer.subviews {
+            if subview.constraints.contains(where: { $0.firstAttribute == .height && $0.constant == 1 }) {
+                subview.backgroundColor = isDarkMode ?
+                    UIColor.white.withAlphaComponent(0.2) :
+                    UIColor.black.withAlphaComponent(0.2)
+            }
         }
         
         // Update clear button text color
@@ -1016,9 +1073,8 @@ class FiltersModalViewController: UIViewController {
             newStyleButton.isSelected.toggle()
         }
         
-        // Immediately apply the filter and dismiss
-        sendSelectedFilters()
-        dismissModal()
+        // DO NOT dismiss modal here - only update the button state
+        // Modal will dismiss when user slides down or taps outside
     }
     
     @objc private func clearButtonTapped() {
@@ -1029,23 +1085,59 @@ class FiltersModalViewController: UIViewController {
         advancedButton.isSelected = false
         dayButton.isSelected = false
         nightButton.isSelected = false
+        fillingFastButton.isSelected = false
         
-        // Send empty filters
-        sendSelectedFilters()
-        dismissModal()
+        // DO NOT send filters or dismiss here
+        // Wait for user to slide down or tap outside
     }
     
     @objc private func handleOutsideTap(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: view)
         if !contentContainer.frame.contains(location) {
+            // Send current selections and dismiss
             sendSelectedFilters()
             dismissModal()
         }
     }
     
+    // MARK: - Pan Gesture Handler
+    @objc private func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: view)
+        let velocity = gesture.velocity(in: view)
+        
+        switch gesture.state {
+        case .changed:
+            // Only allow downward dragging
+            if translation.y > 0 {
+                contentContainer.transform = CGAffineTransform(translationX: 0, y: translation.y)
+                // Fade background as we drag down
+                let progress = min(translation.y / 200, 1.0)
+                view.backgroundColor = UIColor.black.withAlphaComponent(0.5 * (1 - progress))
+            }
+            
+        case .ended:
+            // If dragged down more than 150 points or fast downward swipe
+            if translation.y > 150 || velocity.y > 800 {
+                dismissModal()
+            } else {
+                // Snap back to original position with spring animation
+                UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5, options: .curveEaseOut) {
+                    self.contentContainer.transform = .identity
+                    self.view.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+                }
+            }
+            
+        default:
+            break
+        }
+    }
+    
     private func dismissModal() {
-        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseIn) {
-            self.contentContainer.transform = CGAffineTransform(translationX: 0, y: 300)
+        // Always send current selections when dismissing
+        sendSelectedFilters()
+        
+        UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: .curveEaseIn) {
+            self.contentContainer.transform = CGAffineTransform(translationX: 0, y: self.view.bounds.height)
             self.view.backgroundColor = UIColor.black.withAlphaComponent(0)
         } completion: { _ in
             self.dismiss(animated: false, completion: nil)
@@ -1142,9 +1234,6 @@ class DateChipView: UIView {
         layer.masksToBounds = true
     }
     
-    
-    
-    // Add this method to update the isDarkMode property when trait collection changes
     func updateDarkMode(_ isDarkMode: Bool) {
         self.isDarkMode = isDarkMode
         updateAppearance()

@@ -924,6 +924,7 @@ class TeamMatchInformationViewController: UIViewController {
         nameLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.isUserInteractionEnabled = true // Enable tap
         
         // Set name with "(Host)" indicator if needed
         if isCurrentUser {
@@ -932,6 +933,13 @@ class TeamMatchInformationViewController: UIViewController {
             nameLabel.text = "\(player.name)"
         } else {
             nameLabel.text = player.name
+        }
+        
+        // Add tap gesture to name label (only if not current user)
+        if !isCurrentUser {
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(playerNameTapped(_:)))
+            nameLabel.addGestureRecognizer(tapGesture)
+            nameLabel.tag = Int(player.userId.uuidString.hash) // Store player ID in tag
         }
         
         let actionButton = UIButton(type: .system)
@@ -976,6 +984,34 @@ class TeamMatchInformationViewController: UIViewController {
         ])
         
         return container
+    }
+    
+    // MARK: - Tap Gesture Handlers
+    
+    @objc private func playerNameTapped(_ sender: UITapGestureRecognizer) {
+        guard let nameLabel = sender.view as? UILabel else { return }
+        
+        // Find the player by matching the tag (which contains hashed UUID)
+        let tagValue = nameLabel.tag
+        guard let player = allPlayers.first(where: {
+            Int($0.userId.uuidString.hash) == tagValue
+        }) else { return }
+        
+        // Don't navigate if player is current user
+        if player.userId.uuidString == currentUserId {
+            return
+        }
+        
+        // Navigate to UserProfileViewController for player
+        navigateToUserProfile(userId: player.userId)
+    }
+    
+    private func navigateToUserProfile(userId: UUID) {
+        let userProfileVC = UserProfileViewController()
+        userProfileVC.userId = userId
+        
+        // Push to navigation controller
+        navigationController?.pushViewController(userProfileVC, animated: true)
     }
     
     // MARK: - Helper Methods

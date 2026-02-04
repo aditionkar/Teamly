@@ -577,16 +577,8 @@ class TeamInformationViewController: UIViewController {
         nameLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        let roleLabel = UILabel()
-        let roleText = member.isCaptain ? "Captain" : "Member"
-        roleLabel.text = roleText
-        roleLabel.font = UIFont.systemFont(ofSize: 12, weight: .regular)
-        roleLabel.textColor = member.isCaptain ? .systemRed : .systemBlue
-        roleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
         containerView.addSubview(avatarView)
         containerView.addSubview(nameLabel)
-        containerView.addSubview(roleLabel)
         
         // Add leave button for current user (non-captain)
         if showLeaveButton {
@@ -657,10 +649,7 @@ class TeamInformationViewController: UIViewController {
             avatarIcon.heightAnchor.constraint(equalToConstant: 25),
             
             nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 20),
-            nameLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 14),
-            
-            roleLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 20),
-            roleLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2)
+            nameLabel.centerYAnchor.constraint(equalTo: containerView.centerYAnchor)
         ])
         
         return containerView

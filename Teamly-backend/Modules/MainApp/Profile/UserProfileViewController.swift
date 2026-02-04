@@ -2,6 +2,8 @@
 //  UserProfileViewController.swift
 //  Teamly-backend
 //
+//  Created by user@37 on 03/02/26.
+//
 
 import UIKit
 import Supabase
@@ -109,6 +111,19 @@ class UserProfileViewController: UIViewController {
         return label
     }()
     
+    // NEW: Send Request Button
+    private let sendRequestButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Send Request", for: .normal)
+        button.backgroundColor = .systemGreen
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        button.layer.cornerRadius = 12
+        button.clipsToBounds = true
+        return button
+    }()
+    
     private let teamsLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -154,6 +169,7 @@ class UserProfileViewController: UIViewController {
         setupUI()
         updateColors()
         setupBackButton()
+        setupSendRequestButton() // NEW: Setup button action
         
         // Start loading data
         Task {
@@ -198,6 +214,7 @@ class UserProfileViewController: UIViewController {
         contentView.addSubview(nameLabel)
         contentView.addSubview(ageLabel)
         contentView.addSubview(genderLabel)
+        contentView.addSubview(sendRequestButton) // NEW: Add button to view hierarchy
         contentView.addSubview(teamsLabel)
         contentView.addSubview(teamsStackView)
         contentView.addSubview(sportsLabel)
@@ -210,6 +227,11 @@ class UserProfileViewController: UIViewController {
         backButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
     }
     
+    // NEW: Setup send request button action
+    private func setupSendRequestButton() {
+        sendRequestButton.addTarget(self, action: #selector(sendRequestButtonTapped), for: .touchUpInside)
+    }
+    
     @objc private func backButtonTapped() {
         if let nav = navigationController, nav.viewControllers.count > 1 {
             nav.popViewController(animated: true)
@@ -218,12 +240,32 @@ class UserProfileViewController: UIViewController {
         }
     }
     
+    // NEW: Send request button action handler
+    @objc private func sendRequestButtonTapped() {
+        print("Send Request button tapped")
+        // TODO: Implement request sending logic
+        showRequestSentAlert()
+    }
+    
+    private func showRequestSentAlert() {
+        let alert = UIAlertController(
+            title: "Request Sent",
+            message: "Your connection request has been sent successfully.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+        present(alert, animated: true)
+    }
+    
     // MARK: - Data Fetching
     private func fetchUserProfileData() async {
         guard let userId = userId else {
-            await showError(message: "User ID not found")
-            return
-        }
+                await MainActor.run {
+                    showError(message: "User ID not found")
+                }
+                return
+            }
         
         await MainActor.run {
             loadingIndicator.startAnimating()
@@ -453,12 +495,12 @@ class UserProfileViewController: UIViewController {
         emojiLabel.textAlignment = .center
         emojiContainer.addSubview(emojiLabel)
         
-        let sportNameLabel = UILabel()
-        sportNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        sportNameLabel.text = sportName
-        sportNameLabel.font = .systemFont(ofSize: 16, weight: .medium)
-        sportNameLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack
-        rowView.addSubview(sportNameLabel)
+//        let sportNameLabel = UILabel()
+//        sportNameLabel.translatesAutoresizingMaskIntoConstraints = false
+//        sportNameLabel.text = sportName
+//        sportNameLabel.font = .systemFont(ofSize: 16, weight: .medium)
+//        sportNameLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack
+//        rowView.addSubview(sportNameLabel)
         
         let levelBadge = UIView()
         levelBadge.translatesAutoresizingMaskIntoConstraints = false
@@ -476,27 +518,29 @@ class UserProfileViewController: UIViewController {
         levelBadge.addSubview(levelLabel)
         
         NSLayoutConstraint.activate([
+            // Emoji container
             emojiContainer.leadingAnchor.constraint(equalTo: rowView.leadingAnchor),
             emojiContainer.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
             emojiContainer.widthAnchor.constraint(equalToConstant: 65),
             emojiContainer.heightAnchor.constraint(equalToConstant: 65),
             
+            // Emoji label
             emojiLabel.centerXAnchor.constraint(equalTo: emojiContainer.centerXAnchor),
             emojiLabel.centerYAnchor.constraint(equalTo: emojiContainer.centerYAnchor),
             
-            sportNameLabel.leadingAnchor.constraint(equalTo: emojiContainer.trailingAnchor, constant: 16),
-            sportNameLabel.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
-            
-            levelBadge.leadingAnchor.constraint(equalTo: sportNameLabel.trailingAnchor, constant: 12),
+            // Level badge
+            levelBadge.leadingAnchor.constraint(equalTo: emojiContainer.trailingAnchor, constant: 24),
             levelBadge.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
             levelBadge.heightAnchor.constraint(equalToConstant: 30),
-            levelBadge.trailingAnchor.constraint(lessThanOrEqualTo: rowView.trailingAnchor, constant: -16),
+
             
+            // Level label
             levelLabel.topAnchor.constraint(equalTo: levelBadge.topAnchor, constant: 8),
             levelLabel.bottomAnchor.constraint(equalTo: levelBadge.bottomAnchor, constant: -8),
-            levelLabel.leadingAnchor.constraint(equalTo: levelBadge.leadingAnchor, constant: 12),
-            levelLabel.trailingAnchor.constraint(equalTo: levelBadge.trailingAnchor, constant: -12),
+            levelLabel.leadingAnchor.constraint(equalTo: levelBadge.leadingAnchor, constant: 20),
+            levelLabel.trailingAnchor.constraint(equalTo: levelBadge.trailingAnchor, constant: -20),
             
+            // Row height
             rowView.heightAnchor.constraint(equalToConstant: 80)
         ])
         
@@ -649,7 +693,13 @@ class UserProfileViewController: UIViewController {
             genderLabel.leadingAnchor.constraint(equalTo: ageLabel.leadingAnchor),
             genderLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             
-            teamsLabel.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 32),
+            // NEW: Send Request Button constraints
+            sendRequestButton.topAnchor.constraint(equalTo: genderLabel.bottomAnchor, constant: 16),
+            sendRequestButton.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            sendRequestButton.widthAnchor.constraint(equalToConstant: 150),
+            sendRequestButton.heightAnchor.constraint(equalToConstant: 25),
+            
+            teamsLabel.topAnchor.constraint(equalTo: sendRequestButton.bottomAnchor, constant: 32), // Updated from avatarView to sendRequestButton
             teamsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             teamsLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             
@@ -668,11 +718,11 @@ class UserProfileViewController: UIViewController {
         ])
     }
     
-    private func showError(message: String) async {
-        await MainActor.run {
+    private func showError(message: String) {
+        DispatchQueue.main.async {
             let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
+            self.present(alert, animated: true)
         }
     }
 }

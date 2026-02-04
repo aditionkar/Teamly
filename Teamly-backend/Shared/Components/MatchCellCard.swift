@@ -201,7 +201,7 @@ class MatchCellCard: UICollectionViewCell {
             containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
             
             // Venue label above separator - REDUCED padding
-            venueLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 28),
+            venueLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
             venueLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             venueLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             
@@ -217,7 +217,7 @@ class MatchCellCard: UICollectionViewCell {
             
             timeLabel.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 15),
             timeLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 22),
-            timeLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -28),
+            timeLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20),
             
             slotsLabel.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
             slotsLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),

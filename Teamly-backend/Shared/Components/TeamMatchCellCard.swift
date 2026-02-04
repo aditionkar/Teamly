@@ -185,7 +185,7 @@ class TeamMatchCellCard: UICollectionViewCell {
     
     private let againstTeamLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         label.textColor = .primaryWhite
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -238,27 +238,27 @@ class TeamMatchCellCard: UICollectionViewCell {
             containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
             
             // Venue label above separator
-            venueLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
+            venueLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
             venueLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             venueLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             
             // Separator below venue
-            separator.topAnchor.constraint(equalTo: venueLabel.bottomAnchor, constant: 10),
+            separator.topAnchor.constraint(equalTo: venueLabel.bottomAnchor, constant: 12),
             separator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             separator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
             
             // Date and time constraints with proper breathing room
-            dateLabel.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 20),
+            dateLabel.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 28),
             dateLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 22),
             
-            timeLabel.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 14),
+            timeLabel.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 15),
             timeLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 22),
             timeLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20),
             
             // Against team label aligned with date (in place of slots)
             againstTeamLabel.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
-            againstTeamLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+            againstTeamLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
             
             // Going label aligned with time (in place of against team)
             goingLabel.centerYAnchor.constraint(equalTo: timeLabel.centerYAnchor),
@@ -318,31 +318,16 @@ class TeamMatchCellCard: UICollectionViewCell {
             let flagSymbol = NSTextAttachment()
             let flagImage = UIImage(systemName: "flag.2.crossed.fill")?.withTintColor(.systemGray)
             flagSymbol.image = flagImage
-            flagSymbol.bounds = CGRect(x: 0, y: -3, width: 16, height: 16)
+            flagSymbol.bounds = CGRect(x: 0, y: -3, width: 20, height: 17)
             
             let attributedString = NSMutableAttributedString()
             attributedString.append(NSAttributedString(attachment: flagSymbol))
-            attributedString.append(NSAttributedString(string: " \(opponentName)"))
+            attributedString.append(NSAttributedString(string: "  \(opponentName)"))
             
             againstTeamLabel.attributedText = attributedString
             againstTeamLabel.isHidden = false
         } else {
-            // For internal matches, show something else or hide
-            if teamMatch.matchType == "team_internal" {
-                let internalSymbol = NSTextAttachment()
-                let internalImage = UIImage(systemName: "person.3.fill")?.withTintColor(.systemPurple)
-                internalSymbol.image = internalImage
-                internalSymbol.bounds = CGRect(x: 0, y: -3, width: 16, height: 16)
-                
-                let attributedString = NSMutableAttributedString()
-                attributedString.append(NSAttributedString(attachment: internalSymbol))
-                attributedString.append(NSAttributedString(string: " Internal"))
-                
-                againstTeamLabel.attributedText = attributedString
-                againstTeamLabel.isHidden = false
-            } else {
                 againstTeamLabel.isHidden = true
-            }
         }
         
         // Set initial colors based on current trait collection

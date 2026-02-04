@@ -20,6 +20,7 @@ class HomeViewController: UIViewController {
     private var preferredSportsMatches: [String: [DBMatch]] = [:] // Dictionary to store matches by sport name
     private var selectedSportIndex: Int = 0 // Track which sport is currently selected
     private var tableViewHeightConstraint: NSLayoutConstraint?
+    private var contentViewBottomConstraint: NSLayoutConstraint?
     
     // MARK: - UI Components
     private let topGreenTint: UIView = {
@@ -77,12 +78,14 @@ class HomeViewController: UIViewController {
         return button
     }()
     
-    private let searchBar: UISearchBar = {
-        let searchBar = UISearchBar()
-        searchBar.placeholder = "Search players"
-        searchBar.searchBarStyle = .minimal
-        searchBar.translatesAutoresizingMaskIntoConstraints = false
-        return searchBar
+    private let searchButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle(" Search players", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .regular)
+        button.contentHorizontalAlignment = .left
+        button.titleEdgeInsets = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 0)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
     }()
     
     // MARK: - Sports Selection Collection View
@@ -142,7 +145,7 @@ class HomeViewController: UIViewController {
         tableView.showsVerticalScrollIndicator = false
         tableView.isScrollEnabled = false // Since it's inside a scroll view
         tableView.translatesAutoresizingMaskIntoConstraints = false
-        tableView.rowHeight = 220
+        tableView.rowHeight = 190
         return tableView
     }()
     
@@ -211,7 +214,7 @@ class HomeViewController: UIViewController {
         contentView.addSubview(topRightContainer)
         topRightContainer.addSubview(postButton)
         topRightContainer.addSubview(notificationButton)
-        contentView.addSubview(searchBar)
+        contentView.addSubview(searchButton)
         contentView.addSubview(sportsCollectionView)
         contentView.addSubview(preferredSportsContainer)
         
@@ -226,7 +229,7 @@ class HomeViewController: UIViewController {
         preferredSportsHeader.addSubview(seeMoreButton)
         
         setupConstraints()
-        updateSearchBarAppearance()
+        updateSearchButtonAppearance()
         
         // Hide content initially
         contentView.isHidden = true
@@ -259,8 +262,8 @@ class HomeViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
             
             // Title Label
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20 + view.safeAreaInsets.top),
+            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: topRightContainer.leadingAnchor, constant: -12),
             
             // Top Right Container
@@ -282,13 +285,13 @@ class HomeViewController: UIViewController {
             notificationButton.heightAnchor.constraint(equalToConstant: 44),
             
             // Search Bar
-            searchBar.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
-            searchBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
-            searchBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
-            searchBar.heightAnchor.constraint(equalToConstant: 50),
+            searchButton.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
+            searchButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+            searchButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            searchButton.heightAnchor.constraint(equalToConstant: 45),
             
             // Sports Collection View
-            sportsCollectionView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 20),
+            sportsCollectionView.topAnchor.constraint(equalTo: searchButton.bottomAnchor, constant: 20),
             sportsCollectionView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             sportsCollectionView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             sportsCollectionView.heightAnchor.constraint(equalToConstant: 100),
@@ -297,7 +300,7 @@ class HomeViewController: UIViewController {
             preferredSportsContainer.topAnchor.constraint(equalTo: sportsCollectionView.bottomAnchor, constant: 10),
             preferredSportsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             preferredSportsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            preferredSportsContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
+            // Bottom constraint will be set dynamically
             
             // Preferred Sports Header
             preferredSportsHeader.topAnchor.constraint(equalTo: preferredSportsContainer.topAnchor),
@@ -323,13 +326,14 @@ class HomeViewController: UIViewController {
             matchesTableView.topAnchor.constraint(equalTo: preferredSportsHeader.bottomAnchor, constant: 10),
             matchesTableView.leadingAnchor.constraint(equalTo: preferredSportsContainer.leadingAnchor),
             matchesTableView.trailingAnchor.constraint(equalTo: preferredSportsContainer.trailingAnchor),
-            matchesTableView.bottomAnchor.constraint(equalTo: preferredSportsContainer.bottomAnchor),
+            // matchesTableView.bottomAnchor.constraint(equalTo: preferredSportsContainer.bottomAnchor), // Will be set dynamically
             
             // No Matches Label
             noMatchesLabel.centerXAnchor.constraint(equalTo: preferredSportsContainer.centerXAnchor),
             noMatchesLabel.topAnchor.constraint(equalTo: preferredSportsHeader.bottomAnchor, constant: 150),
             noMatchesLabel.leadingAnchor.constraint(equalTo: preferredSportsContainer.leadingAnchor, constant: 20),
-            noMatchesLabel.trailingAnchor.constraint(equalTo: preferredSportsContainer.trailingAnchor, constant: -20)
+            noMatchesLabel.trailingAnchor.constraint(equalTo: preferredSportsContainer.trailingAnchor, constant: -20),
+            noMatchesLabel.bottomAnchor.constraint(lessThanOrEqualTo: preferredSportsContainer.bottomAnchor, constant: -20)
         ])
         
         // Create initial tableView height constraint
@@ -353,6 +357,7 @@ class HomeViewController: UIViewController {
         notificationButton.addTarget(self, action: #selector(notificationButtonTapped), for: .touchUpInside)
         postButton.addTarget(self, action: #selector(postButtonTapped), for: .touchUpInside)
         seeMoreButton.addTarget(self, action: #selector(seeMoreGamesTapped), for: .touchUpInside)
+        searchButton.addTarget(self, action: #selector(searchButtonTapped), for: .touchUpInside) // Add this line
     }
     
     // MARK: - Data Fetching
@@ -436,6 +441,7 @@ class HomeViewController: UIViewController {
                     print("✅ Found \(dbMatches.count) matches for \(sport.name)")
                     
                     // Update UI on main thread
+                    // In fetchData() method, after loading completes:
                     await MainActor.run {
                         self.sports = sortedSports
                         self.sportsCollectionView.reloadData()
@@ -483,13 +489,61 @@ class HomeViewController: UIViewController {
         noMatchesLabel.isHidden = !matches.isEmpty
         
         // Update table view height based on number of matches
-        let tableViewHeight = CGFloat(matches.count) * 220
+        let tableViewHeight = CGFloat(matches.count) * 190
         tableViewHeightConstraint?.constant = tableViewHeight
+        
+        // Remove any existing bottom constraint from preferredSportsContainer
+        preferredSportsContainer.constraints.forEach { constraint in
+            if constraint.firstAttribute == .bottom && constraint.secondAttribute == .bottom {
+                preferredSportsContainer.removeConstraint(constraint)
+            }
+        }
+        
+        // Remove any existing bottom constraint from matchesTableView
+        matchesTableView.constraints.forEach { constraint in
+            if constraint.firstAttribute == .bottom && constraint.secondAttribute == .bottom {
+                matchesTableView.removeConstraint(constraint)
+            }
+        }
+        
+        // Add the correct constraints based on whether there are matches
+        if matches.isEmpty {
+            // When no matches, connect noMatchesLabel.bottom to preferredSportsContainer.bottom
+            preferredSportsContainer.addConstraint(
+                NSLayoutConstraint(
+                    item: noMatchesLabel,
+                    attribute: .bottom,
+                    relatedBy: .equal,
+                    toItem: preferredSportsContainer,
+                    attribute: .bottom,
+                    multiplier: 1,
+                    constant: -20
+                )
+            )
+        } else {
+            // When there are matches, connect matchesTableView.bottom to preferredSportsContainer.bottom
+            preferredSportsContainer.addConstraint(
+                NSLayoutConstraint(
+                    item: matchesTableView,
+                    attribute: .bottom,
+                    relatedBy: .equal,
+                    toItem: preferredSportsContainer,
+                    attribute: .bottom,
+                    multiplier: 1,
+                    constant: 0
+                )
+            )
+        }
+        
+        // Connect preferredSportsContainer.bottom to contentView.bottom
+        contentViewBottomConstraint?.isActive = false
+        contentViewBottomConstraint = preferredSportsContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20)
+        contentViewBottomConstraint?.isActive = true
         
         // Force layout update
         view.layoutIfNeeded()
     }
-    
+
     private func fetchMatchesForSelectedSport(_ sport: HomeDataService.Sport) {
         Task {
             do {
@@ -557,6 +611,21 @@ class HomeViewController: UIViewController {
         }
     }
     
+    @objc private func searchButtonTapped() {
+        let searchVC = SearchViewController()
+        
+        if let navController = navigationController {
+            navController.pushViewController(searchVC, animated: true)
+            navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
+        } else {
+            let navController = UINavigationController(rootViewController: searchVC)
+            navController.modalPresentationStyle = .fullScreen
+            navController.setNavigationBarHidden(true, animated: false)
+            navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
+            present(navController, animated: true)
+        }
+    }
+    
     // MARK: - Navigation Methods
     private func navigateToMatchesViewController(with sportName: String) {
         let matchesVC = MatchesViewController()
@@ -603,7 +672,7 @@ class HomeViewController: UIViewController {
         notificationButton.tintColor = isDarkMode ? .primaryWhite : .primaryBlack
         noMatchesLabel.textColor = isDarkMode ? .gray : .darkGray
         
-        updateSearchBarAppearance()
+        updateSearchButtonAppearance()
     }
     
     private func updateGradientColors() {
@@ -628,25 +697,22 @@ class HomeViewController: UIViewController {
         gradientLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
     }
     
-    private func updateSearchBarAppearance() {
+    private func updateSearchButtonAppearance() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         
-        if let textField = searchBar.value(forKey: "searchField") as? UITextField {
-            textField.backgroundColor = isDarkMode ? .secondaryDark : .tertiaryLight
-            textField.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-            
-            let placeholderColor = isDarkMode ?
-                UIColor.gray.withAlphaComponent(0.5) :
-                UIColor.darkGray.withAlphaComponent(0.6)
-            
-            textField.attributedPlaceholder = NSAttributedString(
-                string: "Search players",
-                attributes: [NSAttributedString.Key.foregroundColor: placeholderColor]
-            )
-            
-            textField.layer.cornerRadius = 6
-            textField.clipsToBounds = true
-        }
+        searchButton.backgroundColor = isDarkMode ? .secondaryDark : .tertiaryLight
+        searchButton.setTitleColor(isDarkMode ? .white.withAlphaComponent(0.5) : .darkGray.withAlphaComponent(0.6), for: .normal)
+        searchButton.layer.cornerRadius = 22
+        searchButton.clipsToBounds = true
+        
+        // Add a magnifying glass icon
+        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+        let searchIcon = UIImage(systemName: "magnifyingglass", withConfiguration: config)
+        searchButton.setImage(searchIcon, for: .normal)
+        searchButton.tintColor = isDarkMode ? .white.withAlphaComponent(0.5) : .darkGray.withAlphaComponent(0.6)
+        searchButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 0)
+        searchButton.semanticContentAttribute = .forceLeftToRight
+        searchButton.imageView?.contentMode = .scaleAspectFit
     }
     
     private func showError(_ message: String) {
