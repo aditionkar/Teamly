@@ -470,6 +470,8 @@ class ChallengeTeamMatchViewController: UIViewController {
     private func setupPickers() {
         // Setup Time Picker
         timePicker.datePickerMode = .time
+        timePicker.minuteInterval = 30
+        
         if #available(iOS 13.4, *) {
             timePicker.preferredDatePickerStyle = .wheels
         }

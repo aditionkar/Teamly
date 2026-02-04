@@ -192,8 +192,7 @@ class SportSelectionViewController: UIViewController {
                 await MainActor.run {
                     self.loadingIndicator.stopAnimating()
                     print("Error fetching sports: \(error)")
-                    
-                    // Show error message
+
                     let alert = UIAlertController(
                         title: "Error",
                         message: "Failed to load sports. Please try again.",
@@ -249,8 +248,7 @@ class SportSelectionViewController: UIViewController {
     // MARK: - Actions
     @objc private func nextButtonTapped() {
         guard !selectedSports.isEmpty else { return }
-        
-        // Show loading indicator
+
         let loadingIndicator = UIActivityIndicatorView(style: .medium)
         loadingIndicator.center = view.center
         loadingIndicator.startAnimating()
@@ -259,33 +257,27 @@ class SportSelectionViewController: UIViewController {
         
         Task {
             do {
-                // Get current user ID from Supabase auth
                 let session = try await SupabaseManager.shared.client.auth.session
                 let userId = session.user.id
-                
-                // Extract sport IDs from selected sports
+
                 let sportIds = selectedSports.map { $0.id }
-                
-                // Save preferred sports using ProfileManager
+
                 try await ProfileManager.shared.savePreferredSports(
                     userId: userId,
                     sportIds: sportIds
                 )
-                
-                // Success - navigate to next screen
+
                 await MainActor.run {
                     loadingIndicator.removeFromSuperview()
                     nextButton.isEnabled = true
                     
                     let skillLevelVC = SkillLevelViewController(selectedSports: selectedSports)
                     skillLevelVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
-                    
-                    // If we're already in a navigation controller, push
+
                     if let navController = navigationController {
                         navController.pushViewController(skillLevelVC, animated: true)
                         navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
                     } else {
-                        // If not, create a new navigation controller and present modally
                         let navController = UINavigationController(rootViewController: skillLevelVC)
                         navController.modalPresentationStyle = .fullScreen
                         navController.setNavigationBarHidden(true, animated: false)
@@ -300,8 +292,7 @@ class SportSelectionViewController: UIViewController {
                     nextButton.isEnabled = true
                     
                     print("Error saving preferred sports: \(error.localizedDescription)")
-                    
-                    // Show error alert
+
                     let alert = UIAlertController(
                         title: "Error",
                         message: "Failed to save sports selection. Please try again.",
@@ -361,8 +352,6 @@ struct Sport: Codable {
     let id: Int
     let name: String
     let emoji: String
-    
-    // Add if you have other columns
     let created_at: String?
 }
 
@@ -422,7 +411,7 @@ class SportCollectionViewCell: UICollectionViewCell {
     
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            // Container View - 90x90
+            // Container View
             containerView.topAnchor.constraint(equalTo: contentView.topAnchor),
             containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
@@ -430,11 +419,11 @@ class SportCollectionViewCell: UICollectionViewCell {
             containerView.widthAnchor.constraint(equalToConstant: 90),
             containerView.heightAnchor.constraint(equalToConstant: 90),
             
-            // Emoji Label - Centered
+            // Emoji Label
             emojiLabel.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
             emojiLabel.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
             
-            // Selection Indicator - Top right corner
+            // Selection Indicator
             selectionIndicator.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
             selectionIndicator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
             selectionIndicator.widthAnchor.constraint(equalToConstant: 8),
@@ -451,14 +440,12 @@ class SportCollectionViewCell: UICollectionViewCell {
         emojiLabel.text = sport.emoji
         
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update selection appearance
+
         if isSelected {
             containerView.layer.borderColor = UIColor.systemGreen.cgColor
             containerView.layer.borderWidth = 1.0
             selectionIndicator.isHidden = true
         } else {
-            // Use appropriate border color based on mode
             if isDarkMode {
                 containerView.layer.borderColor = UIColor.tertiaryDark.cgColor
             } else {
@@ -467,8 +454,7 @@ class SportCollectionViewCell: UICollectionViewCell {
             containerView.layer.borderWidth = 1.0
             selectionIndicator.isHidden = true
         }
-        
-        // Update background color
+
         updateColors()
     }
     

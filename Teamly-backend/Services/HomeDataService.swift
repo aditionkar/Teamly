@@ -137,7 +137,6 @@ class HomeDataService {
         
         // First, get the sport community ID for this college and sport
         guard let community = try await fetchSportCommunity(collegeId: collegeId, sportId: sportId) else {
-            print("No sport community found for college \(collegeId), sport \(sportId)")
             return []
         }
         
@@ -162,7 +161,6 @@ class HomeDataService {
         
         // Get all unique user IDs from the matches
         let userIds = Set(matchRecords.map { $0.posted_by_user_id.uuidString })
-        print("Fetching names for \(userIds.count) unique users")
         
         // Fetch user names in batch
         let userNames = await fetchUserNames(for: Array(userIds))
@@ -202,8 +200,7 @@ class HomeDataService {
         guard !userIds.isEmpty else { return [:] }
         
         do {
-            print("Fetching profiles for user IDs: \(userIds)")
-            
+
             let response = try await SupabaseManager.shared.client
                 .from("profiles")
                 .select("id, name")
@@ -217,8 +214,7 @@ class HomeDataService {
             for profile in profiles {
                 userNames[profile.id.uuidString] = profile.name ?? "Unknown User"
             }
-            
-            print("Fetched \(profiles.count) user profiles")
+
             return userNames
             
         } catch {

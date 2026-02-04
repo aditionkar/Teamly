@@ -102,7 +102,7 @@ class MatchCellCard: UICollectionViewCell {
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .secondaryDark
-        view.layer.cornerRadius = 35
+        view.layer.cornerRadius = 33
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -369,28 +369,30 @@ class MatchCellCard: UICollectionViewCell {
         timeFormatter.dateFormat = "h:mm a"
         let startTime = timeFormatter.string(from: timeDate)
         
-        // Determine if it's AM or PM
-        let hourFormatter = DateFormatter()
-        hourFormatter.dateFormat = "a"
-        let amPm = hourFormatter.string(from: timeDate)
+        // Check if it's night time (6 PM to 6 AM)
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: timeDate)
+        let isNightTime = hour >= 18 || hour < 6
         
         let timeIconImage: UIImage
-        if amPm.uppercased() == "PM" {
-            // PM = moon icon
+        let tintColor: UIColor
+        
+        if isNightTime {
+            // Between 6:00 PM and 5:59 AM → moon.fill in systemBlue
             timeIconImage = UIImage(systemName: "moon.fill")!
+            tintColor = .systemBlue
             timeIcon.bounds = CGRect(x: 0, y: -2, width: 20, height: 20)
         } else {
-            // AM = sun icon
+            // Between 6:00 AM and 5:59 PM → sun.horizon in systemYellow
             timeIconImage = UIImage(systemName: "sun.horizon")!
+            tintColor = .systemYellow
             timeIcon.bounds = CGRect(x: 0, y: -2, width: 30, height: 20)
         }
         
-        // Use original colors for icons
-        let tintColor = amPm.uppercased() == "PM" ? UIColor.systemBlue : UIColor.systemYellow
+        // Set the icon with appropriate color
         timeIcon.image = timeIconImage.withTintColor(tintColor)
         
         // Calculate end time (add 1 hour)
-        let calendar = Calendar.current
         guard let endTimeDate = calendar.date(byAdding: .hour, value: 1, to: timeDate) else {
             return NSAttributedString(string: startTime)
         }

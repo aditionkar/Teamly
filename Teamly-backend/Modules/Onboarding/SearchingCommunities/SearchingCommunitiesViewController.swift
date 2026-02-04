@@ -657,7 +657,6 @@ extension CollegesModalViewController: UITableViewDelegate, UITableViewDataSourc
         
         Task {
             do {
-                // Get current user ID from Supabase auth
                 let session = try await SupabaseManager.shared.client.auth.session
                 let userId = session.user.id
                 
@@ -666,8 +665,7 @@ extension CollegesModalViewController: UITableViewDelegate, UITableViewDataSourc
                     userId: userId,
                     collegeId: collegeId
                 )
-                
-                // Success - remove loading indicator
+
                 await MainActor.run {
                     loadingIndicator.removeFromSuperview()
                     

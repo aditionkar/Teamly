@@ -107,8 +107,7 @@ class ChallengeMatchDataService {
                 .order("name")
                 .execute()
                 .value
-            
-            print("✅ Successfully fetched \(teams.count) teams with sport ID: \(sportId)")
+
             return teams
         } catch {
             print("❌ Error fetching teams: \(error)")
@@ -162,22 +161,11 @@ class ChallengeMatchDataService {
                 teamId: teamId,
                 postedByUserId: postedByUserId
             )
-            
-            print("📊 Creating internal match with details:")
-            print("  - Type: team_internal")
-            print("  - Team ID: \(teamId)")
-            print("  - Venue: \(venue)")
-            print("  - Date: \(formattedDate)")
-            print("  - Time: \(formattedTime)")
-            print("  - Sport ID: \(sportId)")
-            print("  - Posted by: \(postedByUserId)")
-            
             let response = try await client
                 .from("matches")
                 .insert(matchData)
                 .execute()
-            
-            print("✅ Internal match created successfully")
+
         } catch {
             print("❌ Error creating internal match: \(error)")
             throw error
@@ -208,20 +196,12 @@ class ChallengeMatchDataService {
                 proposedTime: formattedTime,
                 status: "pending"
             )
-            
-            print("📊 Creating match request with details:")
-            print("  - Challenging Team: \(challengingTeamId)")
-            print("  - Challenged Team: \(challengedTeamId)")
-            print("  - Venue: \(venue)")
-            print("  - Date: \(formattedDate)")
-            print("  - Time: \(formattedTime)")
-            
+
             let response = try await client
                 .from("match_requests")
                 .insert(requestData)
                 .execute()
-            
-            print("✅ Match request created successfully")
+
         } catch {
             print("❌ Error creating match request: \(error)")
             throw error

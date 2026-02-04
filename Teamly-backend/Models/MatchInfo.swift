@@ -7,7 +7,6 @@
 
 import Foundation
 
-// Updated to match Supabase schema
 struct MatchInfo: Codable, Identifiable {
     let id: UUID
     let matchType: String
@@ -72,22 +71,6 @@ struct MatchRSVP: Codable {
     }
 }
 
-//struct Friend: Codable {
-//    let id: Int
-//    let userId: UUID
-//    let friendId: UUID
-//    let status: String
-//    let createdAt: Date
-//    let updatedAt: Date
-//    
-//    enum CodingKeys: String, CodingKey {
-//        case id
-//        case userId = "user_id"
-//        case friendId = "friend_id"
-//        case status
-//        case createdAt = "created_at"
-//        case updatedAt = "updated_at"
-//    }
-//}
-
-
+struct Team {
+    var name: String?
+}

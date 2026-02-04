@@ -56,8 +56,7 @@ struct TeamMatch {
         }
     
     static func fromDictionary(_ dict: [String: Any]) -> TeamMatch? {
-        print("Creating TeamMatch from dictionary: \(dict.keys)")
-        
+
         guard let idString = dict["id"] as? String,
               let id = UUID(uuidString: idString),
               let matchType = dict["match_type"] as? String,
@@ -69,17 +68,7 @@ struct TeamMatch {
               let postedByIdString = dict["posted_by_user_id"] as? String,
               let postedByUserId = UUID(uuidString: postedByIdString),
               let createdAtString = dict["created_at"] as? String else {
-            
-            print("Missing required fields in team match data")
-            print("ID: \(dict["id"] as? String ?? "nil")")
-            print("Match Type: \(dict["match_type"] as? String ?? "nil")")
-            print("Venue: \(dict["venue"] as? String ?? "nil")")
-            print("Date: \(dict["match_date"] as? String ?? "nil")")
-            print("Time: \(dict["match_time"] as? String ?? "nil")")
-            print("Sport ID: \(dict["sport_id"] as? Int ?? 0)")
-            print("Players Needed: \(dict["players_needed"] as? Int ?? 0)")
-            print("Posted By: \(dict["posted_by_user_id"] as? String ?? "nil")")
-            print("Created At: \(dict["created_at"] as? String ?? "nil")")
+
             
             return nil
         }
@@ -143,7 +132,7 @@ class TeamMatchCellCard: UICollectionViewCell {
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .secondaryDark
-        view.layer.cornerRadius = 35
+        view.layer.cornerRadius = 33
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -384,28 +373,32 @@ class TeamMatchCellCard: UICollectionViewCell {
         timeFormatter.dateFormat = "h:mm a"
         let startTime = timeFormatter.string(from: timeDate)
         
-        // Determine if it's AM or PM
-        let hourFormatter = DateFormatter()
-        hourFormatter.dateFormat = "a"
-        let amPm = hourFormatter.string(from: timeDate)
+        // Check if it's night time (6 PM to 6 AM)
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: timeDate)
+        let isNightTime = hour >= 18 || hour < 6
         
         let timeIconImage: UIImage
-        if amPm.uppercased() == "PM" {
-            // PM = moon icon in systemBlue
+        let tintColor: UIColor
+        let iconBounds: CGRect
+        
+        if isNightTime {
+            // Between 6:00 PM and 5:59 AM → moon.fill in systemBlue
             timeIconImage = UIImage(systemName: "moon.fill")!
-            timeIcon.bounds = CGRect(x: 0, y: -2, width: 20, height: 20)
+            tintColor = .systemBlue
+            iconBounds = CGRect(x: 0, y: -2, width: 20, height: 20)
         } else {
-            // AM = sun icon in systemYellow
+            // Between 6:00 AM and 5:59 PM → sun.horizon in systemYellow
             timeIconImage = UIImage(systemName: "sun.horizon")!
-            timeIcon.bounds = CGRect(x: 0, y: -2, width: 30, height: 20)
+            tintColor = .systemYellow
+            iconBounds = CGRect(x: 0, y: -2, width: 30, height: 20)
         }
         
-        // Use specified colors for icons
-        let tintColor = amPm.uppercased() == "PM" ? UIColor.systemBlue : UIColor.systemYellow
+        // Set the icon with appropriate color and bounds
         timeIcon.image = timeIconImage.withTintColor(tintColor)
+        timeIcon.bounds = iconBounds
         
         // Calculate end time (add 1 hour)
-        let calendar = Calendar.current
         guard let endTimeDate = calendar.date(byAdding: .hour, value: 1, to: timeDate) else {
             // If can't calculate end time, just show start time
             let fullString = NSMutableAttributedString()

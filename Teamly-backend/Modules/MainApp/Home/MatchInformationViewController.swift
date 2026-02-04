@@ -78,15 +78,6 @@ class MatchInformationViewController: UIViewController {
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
-    
-    private let pinIcon: UILabel = {
-        let label = UILabel()
-        label.text = "📍"
-        label.font = UIFont.systemFont(ofSize: 18)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
     private let matchDetailsContainerView: UIView = {
         let view = UIView()
         view.layer.cornerRadius = 35
@@ -167,6 +158,12 @@ class MatchInformationViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
+        
+        if match != nil {
+                Task {
+                    await refreshMatchData()
+                }
+            }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -232,8 +229,7 @@ class MatchInformationViewController: UIViewController {
         contentView.addSubview(playersContainerView)
         
         view.addSubview(glassBackButton)
-        
-        venueContainerView.addSubview(pinIcon)
+
         venueContainerView.addSubview(venueLabel)
         
         NSLayoutConstraint.activate([
@@ -276,14 +272,10 @@ class MatchInformationViewController: UIViewController {
             venueContainerView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 15),
             venueContainerView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             venueContainerView.heightAnchor.constraint(equalToConstant: 50),
-            
-            // Pin Icon
-            pinIcon.centerYAnchor.constraint(equalTo: venueContainerView.centerYAnchor),
-            pinIcon.leadingAnchor.constraint(equalTo: venueContainerView.leadingAnchor, constant: 16),
-            
+
             // Venue Label
             venueLabel.centerYAnchor.constraint(equalTo: venueContainerView.centerYAnchor),
-            venueLabel.leadingAnchor.constraint(equalTo: pinIcon.trailingAnchor, constant: 10),
+            venueLabel.leadingAnchor.constraint(equalTo: venueContainerView.leadingAnchor, constant: 16),
             venueLabel.trailingAnchor.constraint(equalTo: venueContainerView.trailingAnchor, constant: -16),
             
             // Match Details Container
@@ -337,8 +329,6 @@ class MatchInformationViewController: UIViewController {
             do {
                 // 1. Get current user ID
                 currentUserId = try await dataService.fetchCurrentUserId()
-                print("Current user ID: \(currentUserId)")
-                
                 // 2. Load match details, host profile, and RSVP players
                 await loadAllData()
                 
@@ -368,16 +358,10 @@ class MatchInformationViewController: UIViewController {
             // 2. Fetch RSVP players with their profiles and friend status
             rsvpPlayers = try await dataService.fetchRSVPPlayers(for: match, currentUserId: currentUserId)
             
-            // Debug: Print all players and their friend status
-            print("\n=== DEBUG: Players Friend Status ===")
-            for player in rsvpPlayers {
-                print("Player: \(player.name), ID: \(player.userId), Is Friend: \(player.isFriend)")
-            }
-            print("=================================\n")
-            
+
+
             // 3. Check if host is friend
             isHostFriend = await dataService.checkFriendshipWithHost(match: match, currentUserId: currentUserId)
-            print("Host is friend: \(isHostFriend)")
             
             // 4. Update UI with all fetched data
             await MainActor.run {
@@ -391,6 +375,27 @@ class MatchInformationViewController: UIViewController {
                 self.loadingIndicator.stopAnimating()
                 self.showError("Failed to load match details")
             }
+        }
+    }
+    
+    private func refreshMatchData() async {
+        guard let match = match else { return }
+        
+        do {
+            // Fetch updated match data with RSVP count
+            let updatedCount = try await dataService.fetchPlayersRSVPCount(matchId: match.id.uuidString)
+            
+            await MainActor.run {
+                // Update the match object with fresh data
+                self.match?.playersRSVPed = updatedCount
+                
+                // Re-fetch RSVP players and host profile
+                Task {
+                    await self.loadAllData()
+                }
+            }
+        } catch {
+            print("Error refreshing match data: \(error)")
         }
     }
     
@@ -541,8 +546,6 @@ class MatchInformationViewController: UIViewController {
         sportLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         sportLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // REMOVED: Posted time label
-        
         // Date label
         let dateLabel = UILabel()
         dateLabel.font = UIFont.systemFont(ofSize: 17, weight: .medium)
@@ -550,7 +553,7 @@ class MatchInformationViewController: UIViewController {
         dateLabel.translatesAutoresizingMaskIntoConstraints = false
         dateLabel.attributedText = formattedDateText(for: match.matchDate, isDarkMode: isDarkMode)
 
-        // Time icon and label
+        // Time icon and label - UPDATED WITH TIME RANGE
         let timeIcon = UIImageView(image: UIImage(systemName: "clock"))
         timeIcon.tintColor = .systemGray
         timeIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -560,7 +563,9 @@ class MatchInformationViewController: UIViewController {
         ])
 
         let timeLabel = UILabel()
-        timeLabel.text = formatTime(from: match.matchTime)
+        // Calculate end time by adding 1 hour to start time
+        let endTime = Calendar.current.date(byAdding: .hour, value: 1, to: match.matchTime) ?? match.matchTime
+        timeLabel.text = formatTimeRange(startTime: match.matchTime, endTime: endTime)
         timeLabel.font = UIFont.systemFont(ofSize: 17, weight: .medium)
         timeLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -638,7 +643,7 @@ class MatchInformationViewController: UIViewController {
         playersCountLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         playersCountLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Add all to container (excluding postedTimeLabel)
+        // Add all to container
         matchDetailsContainerView.addSubview(sportIcon)
         matchDetailsContainerView.addSubview(sportLabel)
         matchDetailsContainerView.addSubview(dateLabel)
@@ -657,7 +662,7 @@ class MatchInformationViewController: UIViewController {
             sportLabel.centerYAnchor.constraint(equalTo: sportIcon.centerYAnchor),
             sportLabel.leadingAnchor.constraint(equalTo: sportIcon.trailingAnchor, constant: 12),
             
-            // Sport label trailing constraint without postedTimeLabel
+            // Sport label trailing constraint
             sportLabel.trailingAnchor.constraint(lessThanOrEqualTo: matchDetailsContainerView.trailingAnchor, constant: -20),
             
             dateLabel.topAnchor.constraint(equalTo: sportIcon.bottomAnchor, constant: 16),
@@ -724,18 +729,15 @@ class MatchInformationViewController: UIViewController {
         nameLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
-        nameLabel.isUserInteractionEnabled = true // Enable tap
         
         if isHost {
             nameLabel.text = "You"
         } else {
             nameLabel.text = hostProfile?.name ?? match.postedByName
-        }
-        
-        // Add tap gesture to name label (only if not current user)
-        if !isHost {
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(hostNameTapped))
-            nameLabel.addGestureRecognizer(tapGesture)
+            
+            nameLabel.isUserInteractionEnabled = true
+                    let tapGesture = UITapGestureRecognizer(target: self, action: #selector(hostNameTapped))
+                    nameLabel.addGestureRecognizer(tapGesture)
         }
         
         let sendButton = UIButton(type: .system)
@@ -867,7 +869,6 @@ class MatchInformationViewController: UIViewController {
         nameLabel.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
-        nameLabel.isUserInteractionEnabled = true // Enable tap
         
         if isCurrentUser {
             nameLabel.text = "You"
@@ -875,12 +876,14 @@ class MatchInformationViewController: UIViewController {
             nameLabel.text = player.name
         }
         
-        // Add tap gesture to name label (only if not current user)
         if !isCurrentUser {
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(playerNameTapped(_:)))
-            nameLabel.addGestureRecognizer(tapGesture)
-            nameLabel.tag = Int(player.userId.uuidString.hash) // Store player ID in tag
-        }
+                nameLabel.isUserInteractionEnabled = true
+                let tapGesture = UITapGestureRecognizer(target: self, action: #selector(playerNameTapped(_:)))
+                nameLabel.addGestureRecognizer(tapGesture)
+                
+                // Store player ID using the tag property (convert UUID hash to Int)
+                nameLabel.tag = Int(player.userId.uuidString.hashValue)
+            }
         
         let actionButton = UIButton(type: .system)
         let buttonTintColor = isDarkMode ? UIColor.systemGreen : .systemGreen
@@ -924,46 +927,6 @@ class MatchInformationViewController: UIViewController {
         return container
     }
     
-    // MARK: - Tap Gesture Handlers
-    
-    @objc private func hostNameTapped() {
-        guard let match = match else { return }
-        
-        // Don't navigate if host is current user
-        if match.postedByUserId.uuidString == currentUserId {
-            return
-        }
-        
-        // Navigate to UserProfileViewController for host
-        navigateToUserProfile(userId: match.postedByUserId)
-    }
-    
-    @objc private func playerNameTapped(_ sender: UITapGestureRecognizer) {
-        guard let nameLabel = sender.view as? UILabel else { return }
-        
-        // Find the player by matching the tag (which contains hashed UUID)
-        let tagValue = nameLabel.tag
-        guard let player = rsvpPlayers.first(where: {
-            Int($0.userId.uuidString.hash) == tagValue
-        }) else { return }
-        
-        // Don't navigate if player is current user
-        if player.userId.uuidString == currentUserId {
-            return
-        }
-        
-        // Navigate to UserProfileViewController for player
-        navigateToUserProfile(userId: player.userId)
-    }
-    
-    private func navigateToUserProfile(userId: UUID) {
-        let userProfileVC = UserProfileViewController()
-        userProfileVC.userId = userId
-        
-        // Push to navigation controller
-        navigationController?.pushViewController(userProfileVC, animated: true)
-    }
-    
     // MARK: - Friend Request Actions
     private func showAlert(title: String, message: String) {
         DispatchQueue.main.async {
@@ -977,11 +940,71 @@ class MatchInformationViewController: UIViewController {
         }
     }
     
+    // MARK: - Tap Gesture Handlers
+
+    @objc private func playerNameTapped(_ sender: UITapGestureRecognizer) {
+        guard let nameLabel = sender.view as? UILabel else { return }
+        
+        // Find the player by matching the tag (which contains hashed UUID)
+        let tagValue = nameLabel.tag
+        
+        // Search through rsvpPlayers to find the matching player
+        guard let player = rsvpPlayers.first(where: { player in
+            Int(player.userId.uuidString.hashValue) == tagValue
+        }) else { return }
+        
+        // Don't navigate if player is current user (shouldn't happen, but check anyway)
+        if player.userId.uuidString == currentUserId {
+            return
+        }
+        
+        // Navigate to UserProfileViewController for player
+        navigateToUserProfile(userId: player.userId)
+    }
+
+    @objc private func hostNameTapped() {
+        guard let match = match else { return }
+        
+        // Don't navigate if host is current user
+        if match.postedByUserId.uuidString == currentUserId {
+            return
+        }
+        
+        // Navigate to UserProfileViewController for host
+        navigateToUserProfile(userId: match.postedByUserId)
+    }
+
+    private func navigateToUserProfile(userId: UUID) {
+        let userProfileVC = UserProfileViewController()
+        userProfileVC.userId = userId
+        
+        // If you have a custom initializer, use it:
+        // let userProfileVC = UserProfileViewController(userId: userId)
+        
+        // Push to navigation controller
+        if let navigationController = navigationController {
+            navigationController.pushViewController(userProfileVC, animated: true)
+        } else {
+            // If not in a navigation controller, present modally
+            let navController = UINavigationController(rootViewController: userProfileVC)
+            navController.modalPresentationStyle = .fullScreen
+            present(navController, animated: true)
+        }
+    }
+    
     // MARK: - Helper Methods
     private func formatTime(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
+    }
+
+    private func formatTimeRange(startTime: Date, endTime: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let startString = formatter.string(from: startTime)
+        let endString = formatter.string(from: endTime)
+        return "\(startString) - \(endString)"
     }
     
     private func formattedDateText(for date: Date, isDarkMode: Bool) -> NSAttributedString {
@@ -1013,6 +1036,8 @@ class MatchInformationViewController: UIViewController {
         
         return fullString
     }
+    
+    
     
     // MARK: - Actions
     @objc private func backButtonTapped() {
@@ -1054,9 +1079,11 @@ class MatchInformationViewController: UIViewController {
     private func joinMatch(matchId: String) async {
         do {
             try await dataService.joinMatch(matchId: matchId, userId: currentUserId)
-            print("Successfully joined match")
             
-            // Reload data to update UI
+            // Update the count
+            await updateMatchPlayersCount()
+            
+            // Reload all data
             await MainActor.run {
                 self.loadingIndicator.startAnimating()
             }
@@ -1070,13 +1097,15 @@ class MatchInformationViewController: UIViewController {
             }
         }
     }
-    
+
     private func leaveMatch(matchId: String) async {
         do {
             try await dataService.leaveMatch(matchId: matchId, userId: currentUserId)
-            print("Successfully left match")
             
-            // Reload data to update UI
+            // Update the count
+            await updateMatchPlayersCount()
+            
+            // Reload all data
             await MainActor.run {
                 self.loadingIndicator.startAnimating()
             }
@@ -1088,6 +1117,21 @@ class MatchInformationViewController: UIViewController {
             await MainActor.run {
                 self.showError("Failed to leave match")
             }
+        }
+    }
+    
+    private func updateMatchPlayersCount() async {
+        guard let match = match else { return }
+        
+        do {
+            let updatedCount = try await dataService.fetchPlayersRSVPCount(matchId: match.id.uuidString)
+            
+            await MainActor.run {
+                self.match?.playersRSVPed = updatedCount
+                self.displayMatchInfo() // Refresh UI with updated count
+            }
+        } catch {
+            print("Error fetching updated players count: \(error)")
         }
     }
     

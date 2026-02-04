@@ -416,7 +416,6 @@ class TeamChatViewController: UIViewController {
             
             await MainActor.run {
                 self.teamMembers = members
-                print("Fetched \(members.count) team members")
             }
         } catch {
             print("Error fetching team members: \(error)")
@@ -537,8 +536,7 @@ class TeamChatViewController: UIViewController {
                 .value
             
             if !newMessages.isEmpty {
-                print("Found \(newMessages.count) new messages")
-                
+
                 // Fetch sender profiles for new messages
                 let uniqueUserIds = Set(newMessages.map { $0.user_id })
                 let newUserIds = uniqueUserIds.filter { senderCache[$0] == nil }
@@ -625,10 +623,7 @@ class TeamChatViewController: UIViewController {
                     .single()
                     .execute()
                     .value
-                
-                print("✅ Message sent successfully: \(response.id)")
-                
-                // Clear text field on success
+
                 await MainActor.run {
                     self.messageTextField.text = ""
                 }

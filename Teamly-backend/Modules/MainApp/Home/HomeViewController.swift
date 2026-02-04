@@ -181,6 +181,8 @@ class HomeViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
+        
+        refreshHomeData()
     }
     
     override func viewDidLayoutSubviews() {
@@ -360,16 +362,16 @@ class HomeViewController: UIViewController {
         searchButton.addTarget(self, action: #selector(searchButtonTapped), for: .touchUpInside) // Add this line
     }
     
+    
+    
     // MARK: - Data Fetching
     private func fetchData() {
         Task {
             do {
-                print("=== FETCHING HOME DATA ===")
                 
                 // 1. Get current user ID from auth
                 let session = try await SupabaseManager.shared.client.auth.session
                 currentUserId = session.user.id.uuidString
-                print("Current user ID: \(currentUserId)")
                 
                 // 2. Fetch user profile to get college ID
                 guard let userProfile = try await dataService.fetchUserProfile(userId: currentUserId) else {
@@ -379,7 +381,6 @@ class HomeViewController: UIViewController {
                 }
                 
                 userCollegeId = userProfile.college_id
-                print("User college ID: \(userCollegeId)")
                 
                 // 3. Fetch college name for title
                 if let college = try await dataService.fetchCollege(collegeId: userCollegeId) {
@@ -390,11 +391,9 @@ class HomeViewController: UIViewController {
                 
                 // 4. Fetch all sports
                 let allSports = try await dataService.fetchAllSports()
-                print("Fetched \(allSports.count) sports")
                 
                 // 5. Fetch user's preferred sports
                 let preferredSportsData = try await dataService.fetchUserPreferredSports(userId: currentUserId)
-                print("User has \(preferredSportsData.count) preferred sports")
                 
                 // Convert to Sport objects
                 var userPreferredSports: [HomeDataService.Sport] = []
@@ -429,30 +428,22 @@ class HomeViewController: UIViewController {
                 }
                 
                 if let sport = initialSport {
-                    print("Fetching matches for initial sport: \(sport.name)...")
                     let dbMatches = try await dataService.fetchMatchesForSport(
                         sportId: sport.id,
                         collegeId: userCollegeId,
                         currentUserId: currentUserId
                     )
                     
-                    // Store matches for this sport
                     preferredSportsMatches[sport.name] = dbMatches
-                    print("✅ Found \(dbMatches.count) matches for \(sport.name)")
-                    
-                    // Update UI on main thread
-                    // In fetchData() method, after loading completes:
+
                     await MainActor.run {
                         self.sports = sortedSports
                         self.sportsCollectionView.reloadData()
-                        
-                        // Update the seeMoreButton tag with the initial sport ID
+
                         self.seeMoreButton.tag = sport.id
-                        
-                        // Update the preferred sports section
+
                         self.updatePreferredSportsSection(for: sport)
-                        
-                        // Select the first cell (which should be the first preferred sport)
+
                         if let index = self.sports.firstIndex(where: { $0.id == sport.id }) {
                             self.selectedSportIndex = index
                             let indexPath = IndexPath(item: index, section: 0)
@@ -461,7 +452,6 @@ class HomeViewController: UIViewController {
                         
                         self.loadingIndicator.stopAnimating()
                         self.contentView.isHidden = false
-                        print("✅ Data loaded successfully")
                     }
                 }
                 
@@ -482,6 +472,11 @@ class HomeViewController: UIViewController {
         
         let matches = preferredSportsMatches[sport.name] ?? []
         
+        // IMPORTANT: Make sure matches are updated with current RSVP counts
+        Task {
+            await updateMatchesWithCurrentRSVPCounts(for: matches, sportName: sport.name)
+        }
+        
         // Update table view
         matchesTableView.reloadData()
         
@@ -492,6 +487,78 @@ class HomeViewController: UIViewController {
         let tableViewHeight = CGFloat(matches.count) * 190
         tableViewHeightConstraint?.constant = tableViewHeight
         
+        // Update constraints based on matches availability
+        updateConstraintsBasedOnMatches(matches)
+    }
+    
+    private func updateMatchesWithCurrentRSVPCounts(for matches: [DBMatch], sportName: String) async {
+        var updatedMatches = matches
+        
+        for i in 0..<updatedMatches.count {
+            let match = updatedMatches[i]
+            
+            do {
+                // FIX: Use the correct method name - fetchRSVPCount
+                let currentRSVPCount = try await dataService.fetchRSVPCount(for: match.id.uuidString)
+                
+                // Create a new DBMatch with updated count
+                updatedMatches[i] = DBMatch(
+                    id: match.id,
+                    matchType: match.matchType,
+                    communityId: match.communityId,
+                    venue: match.venue,
+                    matchDate: match.matchDate,
+                    matchTime: match.matchTime,
+                    sportId: match.sportId,
+                    sportName: match.sportName,
+                    skillLevel: match.skillLevel,
+                    playersNeeded: match.playersNeeded,
+                    postedByUserId: match.postedByUserId,
+                    createdAt: match.createdAt,
+                    playersRSVPed: currentRSVPCount, // Updated count
+                    postedByName: match.postedByName,
+                    isFriend: match.isFriend
+                )
+            } catch {
+                print("Error fetching RSVP count for match \(match.id): \(error)")
+            }
+        }
+        
+        // Update the stored matches with fresh RSVP counts
+        await MainActor.run {
+            self.preferredSportsMatches[sportName] = updatedMatches
+            self.matchesTableView.reloadData()
+        }
+    }
+
+    private func fetchMatchesForSelectedSport(_ sport: HomeDataService.Sport) {
+        Task {
+            do {
+                let dbMatches = try await dataService.fetchMatchesForSport(
+                    sportId: sport.id,
+                    collegeId: userCollegeId,
+                    currentUserId: currentUserId
+                )
+                
+                // Store matches for this sport
+                preferredSportsMatches[sport.name] = dbMatches
+
+                await MainActor.run {
+                    self.updatePreferredSportsSection(for: sport)
+                }
+                
+            } catch {
+                print("❌ ERROR fetching matches for \(sport.name): \(error)")
+                await MainActor.run {
+                    self.preferredSportsMatches[sport.name] = []
+                    self.updatePreferredSportsSection(for: sport)
+                    self.showError("Failed to load matches: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func updateConstraintsBasedOnMatches(_ matches: [DBMatch]) {
         // Remove any existing bottom constraint from preferredSportsContainer
         preferredSportsContainer.constraints.forEach { constraint in
             if constraint.firstAttribute == .bottom && constraint.secondAttribute == .bottom {
@@ -543,33 +610,37 @@ class HomeViewController: UIViewController {
         // Force layout update
         view.layoutIfNeeded()
     }
-
-    private func fetchMatchesForSelectedSport(_ sport: HomeDataService.Sport) {
+    
+    // MARK: - Refresh Methods
+    private func refreshHomeData() {
+        guard !sports.isEmpty else { return }
+        
         Task {
-            do {
-                print("Fetching matches for \(sport.name)...")
-                let dbMatches = try await dataService.fetchMatchesForSport(
-                    sportId: sport.id,
-                    collegeId: userCollegeId,
-                    currentUserId: currentUserId
-                )
-                
-                // Store matches for this sport
-                preferredSportsMatches[sport.name] = dbMatches
-                print("✅ Found \(dbMatches.count) matches for \(sport.name)")
-                
-                // Update UI on main thread
-                await MainActor.run {
-                    self.updatePreferredSportsSection(for: sport)
-                }
-                
-            } catch {
-                print("❌ ERROR fetching matches for \(sport.name): \(error)")
-                await MainActor.run {
-                    self.preferredSportsMatches[sport.name] = []
-                    self.updatePreferredSportsSection(for: sport)
-                    self.showError("Failed to load matches: \(error.localizedDescription)")
-                }
+            await refreshMatchesForCurrentSport()
+        }
+    }
+
+    private func refreshMatchesForCurrentSport() async {
+        let currentSportId = seeMoreButton.tag
+        guard let currentSport = sports.first(where: { $0.id == currentSportId }) else { return }
+        
+        do {
+            let freshMatches = try await dataService.fetchMatchesForSport(
+                sportId: currentSport.id,
+                collegeId: userCollegeId,
+                currentUserId: currentUserId
+            )
+
+            preferredSportsMatches[currentSport.name] = freshMatches
+
+            await MainActor.run {
+                self.updatePreferredSportsSection(for: currentSport)
+            }
+            
+        } catch {
+            print("❌ ERROR refreshing matches: \(error)")
+            await MainActor.run {
+                self.showError("Failed to refresh matches")
             }
         }
     }
@@ -646,6 +717,7 @@ class HomeViewController: UIViewController {
     private func navigateToMatchInformationViewController(with match: DBMatch) {
         let matchInfoVC = MatchInformationViewController()
         matchInfoVC.match = match
+        matchInfoVC.hidesBottomBarWhenPushed = true 
         
         if let navController = navigationController {
             navController.pushViewController(matchInfoVC, animated: true)

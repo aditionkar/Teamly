@@ -39,29 +39,18 @@ class MatchDataService {
                     }
                     return
                 }
-                
-                print("🔍 [DEBUG] Starting fetch for user: \(currentUserId)")
-                
-                // STEP 1: Get match IDs from match_rsvps
-                print("📋 [DEBUG] Step 1: Fetching match IDs from match_rsvps")
+
                 let matchIds = try await fetchMatchIds(userId: currentUserId)
                 
                 if matchIds.isEmpty {
-                    print("⚠️ [DEBUG] No matches found for user")
                     DispatchQueue.main.async {
                         completion(.success([]))
                     }
                     return
                 }
-                
-                print("✅ [DEBUG] Found \(matchIds.count) match IDs: \(matchIds)")
-                
-                // STEP 2: Get match details
-                print("📋 [DEBUG] Step 2: Fetching match details")
+
                 let matches = try await fetchMatchDetails(matchIds: matchIds)
-                
-                print("✅ [DEBUG] Successfully fetched \(matches.count) match details")
-                
+
                 DispatchQueue.main.async {
                     completion(.success(matches))
                 }
@@ -84,8 +73,7 @@ class MatchDataService {
             .eq("user_id", value: userId)
             .eq("rsvp_status", value: "going")
             .execute()
-        
-        print("📊 [DEBUG] Raw match_rsvps response: \(String(data: response.data, encoding: .utf8) ?? "No data")")
+
         
         let data: [[String: Any]] = try JSONSerialization.jsonObject(with: response.data) as? [[String: Any]] ?? []
         
@@ -100,38 +88,24 @@ class MatchDataService {
             .select()
             .in("id", values: matchIds)
             .execute()
-        
-        print("📊 [DEBUG] Raw matches response: \(String(data: matchResponse.data, encoding: .utf8) ?? "No data")")
-        
+
         let matchData: [[String: Any]] = try JSONSerialization.jsonObject(with: matchResponse.data) as? [[String: Any]] ?? []
-        print("📊 [DEBUG] Parsed \(matchData.count) match records")
-        
+
         var matches: [DBMatch] = []
         
         for matchDict in matchData {
-            print("📊 [DEBUG] Processing match dict: \(matchDict)")
-            
-            // Create MatchRecord
+
             guard let matchRecord = createMatchRecord(from: matchDict) else {
                 print("❌ [DEBUG] Failed to create MatchRecord from dict")
                 continue
             }
-            
-            print("✅ [DEBUG] Created MatchRecord for: \(matchRecord.venue)")
-            
-            // Get sport name
+
             let sportName = try await fetchSportName(sportId: matchRecord.sport_id)
-            print("✅ [DEBUG] Sport name: \(sportName)")
-            
-            // Get poster name
+
             let postedByName = try await fetchUserName(userId: matchRecord.posted_by_user_id.uuidString)
-            print("✅ [DEBUG] Poster name: \(postedByName)")
-            
-            // Get RSVP count
+
             let rsvpCount = try await fetchRSVPCount(matchId: matchRecord.id.uuidString)
-            print("✅ [DEBUG] RSVP count: \(rsvpCount)")
-            
-            // Create DBMatch
+
             if let dbMatch = DBMatch.fromMatchRecord(
                 matchRecord,
                 sportName: sportName,
@@ -140,7 +114,6 @@ class MatchDataService {
                 isFriend: false
             ) {
                 matches.append(dbMatch)
-                print("✅ [DEBUG] Successfully created DBMatch for: \(matchRecord.venue)")
             } else {
                 print("❌ [DEBUG] Failed to create DBMatch for: \(matchRecord.venue)")
             }

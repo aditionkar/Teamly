@@ -439,7 +439,6 @@ class CreateTeamViewController: UIViewController {
                     self.selectPlayersButton.setTitle(title, for: .normal)
                     self.selectPlayersButton.isEnabled = !friendUsers.isEmpty
                     self.playersChevronImageView.isHidden = friendUsers.isEmpty
-                    print("Successfully loaded \(friendUsers.count) friends")
                 }
                 
             } catch {
@@ -770,8 +769,7 @@ class CreateTeamViewController: UIViewController {
             showError(message: "Please select a sport")
             return
         }
-        
-        print("Creating team: \(teamName) with \(selectedFriends.count) friends")
+
         createTeamInSupabase(teamName: teamName)
     }
     
@@ -790,9 +788,7 @@ class CreateTeamViewController: UIViewController {
                     .single()
                     .execute()
                     .value
-                
-                print("User's college_id: \(String(describing: userProfile.college_id))")
-                
+
                 // Step 2: Create the team with college_id
                 let newTeam = TeamCreation(
                     name: teamName,
@@ -808,9 +804,7 @@ class CreateTeamViewController: UIViewController {
                     .single()
                     .execute()
                     .value
-                
-                print("Team created successfully: \(createdTeam.name)")
-                
+
                 // Rest of the code remains the same...
                 // Add current user as captain to team_members
                 let captainMember = TeamMemberCreation(
@@ -837,9 +831,7 @@ class CreateTeamViewController: UIViewController {
                         .insert(friendMember)
                         .execute()
                 }
-                
-                print("Added \(selectedFriends.count) friends to team")
-                
+
                 await MainActor.run {
                     // Call completion handler and dismiss
                     self.onTeamCreated?(teamName)

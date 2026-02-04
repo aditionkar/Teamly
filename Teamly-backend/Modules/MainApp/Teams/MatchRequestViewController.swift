@@ -177,9 +177,6 @@ class MatchRequestDataService {
     
     func fetchMatchRequests(for teamId: UUID) async throws -> [(MatchRequest, TeamInfo)] {
         do {
-            print("🔍 Fetching match requests for team: \(teamId)")
-            
-            // Fetch match requests where this team is the challenged team
             let matchRequests: [MatchRequest] = try await client
                 .from("match_requests")
                 .select()
@@ -188,9 +185,7 @@ class MatchRequestDataService {
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            
-            print("📋 Found \(matchRequests.count) pending match requests")
-            
+
             var results: [(MatchRequest, TeamInfo)] = []
             
             // For each match request, fetch the challenging team info
@@ -204,7 +199,6 @@ class MatchRequestDataService {
                 
                 if let challengingTeam = challengingTeams.first {
                     results.append((request, challengingTeam))
-                    print("✅ Found challenging team: \(challengingTeam.name)")
                 }
             }
             
@@ -217,8 +211,7 @@ class MatchRequestDataService {
     
     func respondToMatchRequest(requestId: Int, status: String) async throws {
         do {
-            print("📤 Responding to match request \(requestId) with status: \(status)")
-            
+
             let updateData = MatchRequestStatusUpdate(
                 status: status,
                 responded_at: Date().ISO8601Format()
@@ -229,8 +222,7 @@ class MatchRequestDataService {
                 .update(updateData)
                 .eq("id", value: requestId)
                 .execute()
-            
-            print("✅ Match request \(requestId) updated to status: \(status)")
+
         } catch {
             print("❌ Error responding to match request: \(error)")
             throw error
@@ -239,8 +231,7 @@ class MatchRequestDataService {
     
     func createMatchFromRequest(request: MatchRequest, challengingTeam: TeamInfo) async throws {
         do {
-            print("🎮 Creating match from request \(request.id)")
-            
+
             // Get the challenging team's sport_id
             let teamQuery: [TeamInfoWithSport] = try await client
                 .from("teams")
@@ -272,9 +263,7 @@ class MatchRequestDataService {
                 opponent_team_id: request.challenged_team_id,
                 posted_by_user_id: postedByUserId
             )
-            
-            print("📊 Creating match with data: \(matchData)")
-            
+
             // Insert the match - now it's Encodable
             let matchResponse = try await client
                 .from("matches")
@@ -299,8 +288,7 @@ class MatchRequestDataService {
                 .update(updateData)
                 .eq("id", value: request.id)
                 .execute()
-            
-            print("✅ Match created successfully with ID: \(matchId)")
+
         } catch {
             print("❌ Error creating match from request: \(error)")
             throw error

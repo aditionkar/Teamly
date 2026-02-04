@@ -18,18 +18,13 @@ class MatchesDataService {
         collegeId: Int,
         currentUserId: String
     ) async throws -> [DBMatch] {
-        
-        print("Fetching matches for sport: \(sportName), date: \(date)")
-        
-        // First, get the sport ID from the sport name
+
         guard let sport = try await fetchSportByName(sportName) else {
-            print("Sport not found: \(sportName)")
             return []
         }
         
         // Get the sport community for this college and sport
         guard let community = try await fetchSportCommunity(collegeId: collegeId, sportId: sport.id) else {
-            print("No sport community found for college \(collegeId), sport \(sport.name)")
             return []
         }
         
@@ -48,13 +43,9 @@ class MatchesDataService {
         let matchRecords = try decoder.decode([HomeDataService.MatchRecord].self, from: response.data)
         
         if matchRecords.isEmpty {
-            print("No matches found for \(sportName) on \(date)")
             return []
         }
-        
-        print("Found \(matchRecords.count) matches for \(sportName) on \(date)")
-        
-        // Get all unique user IDs from the matches
+
         let userIds = Set(matchRecords.map { $0.posted_by_user_id.uuidString })
         
         // Fetch user names in batch

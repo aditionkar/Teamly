@@ -15,7 +15,6 @@ class AuthManager {
     
     private init() {}
     
-    // Simple validation - now 6 characters minimum
     private func isFormValid(email: String, password: String) -> Bool {
         let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
         let emailPred = NSPredicate(format: "SELF MATCHES %@", emailRegex)
@@ -29,7 +28,6 @@ class AuthManager {
                 password: password
             )
         } else {
-            // More specific error messages
             var errorMessage = ""
             if !email.isValidEmail() && password.count < 6 {
                 errorMessage = "Invalid email format and password must be at least 6 characters"
@@ -65,7 +63,6 @@ class AuthManager {
     }
 }
 
-// Email validation extension (add this if not already in your AuthManager)
 extension String {
     func isValidEmail() -> Bool {
         let emailRegEx = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
@@ -74,7 +71,6 @@ extension String {
     }
 }
 
-// Add this struct for profile response
 struct ProfileResponse: Codable {
     let name: String?
     let age: Int?
@@ -82,7 +78,6 @@ struct ProfileResponse: Codable {
     let college_id: Int?
 }
 
-// Add this extension to AuthManager.swift
 extension AuthManager {
     
     func isOnboardingComplete(userId: UUID) async throws -> Bool {
@@ -102,7 +97,7 @@ extension AuthManager {
                    profile.gender != nil &&
                    profile.college_id != nil
         } catch {
-            // If error contains PGRST116, it means no profile exists yet
+            // it means no profile exists yet
             if let postgrestError = error as? PostgrestError,
                postgrestError.code == "PGRST116" {
                 print("No profile exists for user \(userId) - onboarding incomplete")
@@ -114,4 +109,3 @@ extension AuthManager {
         }
     }
 }
-

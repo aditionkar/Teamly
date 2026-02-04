@@ -7,6 +7,7 @@
 
 import Foundation
 import Supabase
+import UIKit
 
 class ProfileManager {
     static let shared = ProfileManager()
@@ -18,11 +19,10 @@ class ProfileManager {
     // MARK: - Save Name and Gender
     func saveNameAndGender(userId: UUID, name: String, gender: String) async throws {
         do {
-            // Convert UUID to String for Supabase
+           
             let userIdString = userId.uuidString
             let capitalizedGender = gender.capitalized
-            
-            // Use upsert - will insert if doesn't exist, update if does
+
             try await supabase
                 .from("profiles")
                 .upsert([
@@ -45,8 +45,7 @@ class ProfileManager {
     func saveAge(userId: UUID, age: Int) async throws {
         do {
             let userIdString = userId.uuidString.lowercased()
-            
-            // Define a struct that conforms to Encodable
+
             struct AgeUpdate: Encodable {
                 let age: Int
                 let updated_at: String
@@ -75,28 +74,24 @@ class ProfileManager {
     func savePreferredSports(userId: UUID, sportIds: [Int]) async throws {
         do {
             let userIdString = userId.uuidString
-            
-            // First, clear existing preferred sports for this user
+
             try await supabase
                 .from("user_preferred_sports")
                 .delete()
                 .eq("user_id", value: userIdString)
                 .execute()
-            
-            // If no sports selected, just return
+
             guard !sportIds.isEmpty else {
                 print("No sports selected to save")
                 return
             }
-            
-            // Define a struct that conforms to Encodable
+
             struct PreferredSport: Encodable {
                 let user_id: String
                 let sport_id: Int
                 let created_at: String
             }
-            
-            // Prepare data for bulk insert
+
             let sportsData = sportIds.map { sportId in
                 PreferredSport(
                     user_id: userIdString,
@@ -104,8 +99,7 @@ class ProfileManager {
                     created_at: Date().ISO8601Format()
                 )
             }
-            
-            // Insert all selected sports
+
             try await supabase
                 .from("user_preferred_sports")
                 .insert(sportsData)
@@ -148,8 +142,7 @@ class ProfileManager {
     func saveCollege(userId: UUID, collegeId: Int) async throws {
         do {
             let userIdString = userId.uuidString.lowercased()
-            
-            // Define a struct that conforms to Encodable
+
             struct CollegeUpdate: Encodable {
                 let college_id: Int
                 let updated_at: String
@@ -173,4 +166,72 @@ class ProfileManager {
             throw error
         }
     }
+    
+    // MARK: - Upload Profile Picture
+        func uploadProfilePicture(userId: UUID, image: UIImage) async throws -> String {
+            do {
+                let userIdString = userId.uuidString
+
+                guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                    throw NSError(domain: "ProfileManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG data"])
+                }
+
+                let timestamp = Int(Date().timeIntervalSince1970)
+                let fileName = "profile_\(timestamp).jpg"
+                let filePath = "profile_pictures/\(userIdString)/\(fileName)"
+
+                try await supabase.storage
+                    .from("avatars")
+                    .upload(
+                        path: filePath,
+                        file: imageData,
+                        options: FileOptions(
+                            cacheControl: "3600",
+                            contentType: "image/jpeg"
+                        )
+                    )
+
+                let publicURL = try await supabase.storage
+                    .from("avatars")
+                    .getPublicURL(path: filePath)
+                
+                print("✅ Profile picture uploaded successfully: \(publicURL)")
+
+                try await updateProfilePictureURL(userId: userId, url: publicURL.absoluteString)
+                
+                return publicURL.absoluteString
+                
+            } catch {
+                print("❌ Error uploading profile picture: \(error)")
+                throw error
+            }
+        }
+        
+        private func updateProfilePictureURL(userId: UUID, url: String) async throws {
+            do {
+                let userIdString = userId.uuidString
+                
+                struct ProfilePicUpdate: Encodable {
+                    let profile_pic: String
+                    let updated_at: String
+                }
+                
+                let updateData = ProfilePicUpdate(
+                    profile_pic: url,
+                    updated_at: Date().ISO8601Format()
+                )
+                
+                try await supabase
+                    .from("profiles")
+                    .update(updateData)
+                    .eq("id", value: userIdString)
+                    .execute()
+                
+                print("✅ Profile picture URL updated in database")
+                
+            } catch {
+                print("❌ Error updating profile picture URL: \(error)")
+                throw error
+            }
+        }
 }

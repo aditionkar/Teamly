@@ -47,7 +47,7 @@ class TeamMatchInformationViewController: UIViewController {
     private let titleLabel: UILabel = {
         let label = UILabel()
         label.text = "Match Info"
-        label.font = UIFont.systemFont(ofSize: 35, weight: .bold)
+        label.font = UIFont.systemFont(ofSize: 32, weight: .bold)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -75,14 +75,6 @@ class TeamMatchInformationViewController: UIViewController {
     private let venueLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 24, weight: .semibold)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
-    private let pinIcon: UILabel = {
-        let label = UILabel()
-        label.text = "📍"
-        label.font = UIFont.systemFont(ofSize: 18)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
@@ -241,8 +233,7 @@ class TeamMatchInformationViewController: UIViewController {
         contentView.addSubview(playersContainerView)
         
         view.addSubview(glassBackButton)
-        
-        venueContainerView.addSubview(pinIcon)
+
         venueContainerView.addSubview(venueLabel)
         
         NSLayoutConstraint.activate([
@@ -277,7 +268,7 @@ class TeamMatchInformationViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
             
             // Title Label
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 60),
+            titleLabel.topAnchor.constraint(equalTo: glassBackButton.bottomAnchor, constant: 15),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             
@@ -286,20 +277,16 @@ class TeamMatchInformationViewController: UIViewController {
             venueContainerView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             venueContainerView.heightAnchor.constraint(equalToConstant: 50),
             
-            // Pin Icon
-            pinIcon.centerYAnchor.constraint(equalTo: venueContainerView.centerYAnchor),
-            pinIcon.leadingAnchor.constraint(equalTo: venueContainerView.leadingAnchor, constant: 16),
-            
             // Venue Label
             venueLabel.centerYAnchor.constraint(equalTo: venueContainerView.centerYAnchor),
-            venueLabel.leadingAnchor.constraint(equalTo: pinIcon.trailingAnchor, constant: 10),
+            venueLabel.leadingAnchor.constraint(equalTo: venueContainerView.leadingAnchor, constant: 16),
             venueLabel.trailingAnchor.constraint(equalTo: venueContainerView.trailingAnchor, constant: -16),
             
             // Match Details Container - Dynamic height will be set later
             matchDetailsContainerView.topAnchor.constraint(equalTo: venueContainerView.bottomAnchor, constant: 20),
             matchDetailsContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             matchDetailsContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            matchDetailsContainerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 150), // Minimum height
+            matchDetailsContainerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 130),
             
             // First Separator Line
             firstSeparatorLine.topAnchor.constraint(equalTo: matchDetailsContainerView.bottomAnchor, constant: 30),
@@ -330,8 +317,6 @@ class TeamMatchInformationViewController: UIViewController {
                 // 1. Get current user ID
                 let session = try await SupabaseManager.shared.client.auth.session
                 currentUserId = session.user.id.uuidString
-                print("Current user ID: \(currentUserId)")
-                
                 // 2. Load match details and players (including host)
                 await loadAllData()
                 
@@ -544,8 +529,7 @@ class TeamMatchInformationViewController: UIViewController {
             
             let friendships = try JSONDecoder().decode([[String: AnyCodable]].self, from: response.data)
             let isFriend = !friendships.isEmpty
-            print("Is friend: \(isFriend)")
-            
+
             return isFriend
             
         } catch {
@@ -669,27 +653,27 @@ class TeamMatchInformationViewController: UIViewController {
         }
     }
     
+    // MARK: - Helper Methods
+    private func formatTime(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+
+    private func formatTimeRange(startTime: Date, endTime: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let startString = formatter.string(from: startTime)
+        let endString = formatter.string(from: endTime)
+        return "\(startString) - \(endString)"
+    }
+    
     // MARK: - UI Setup Methods
     private func setupMatchDetailsContainer(match: TeamMatch) {
         matchDetailsContainerView.subviews.forEach { $0.removeFromSuperview() }
         
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Sport icon and label
-        let sportIcon = UIImageView(image: UIImage(systemName: "soccerball"))
-        sportIcon.tintColor = .systemGray
-        sportIcon.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            sportIcon.heightAnchor.constraint(equalToConstant: 18),
-            sportIcon.widthAnchor.constraint(equalToConstant: 18)
-        ])
-
-        let sportLabel = UILabel()
-        sportLabel.text = match.sportName ?? "Sport"
-        sportLabel.font = UIFont.systemFont(ofSize: 17, weight: .medium)
-        sportLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        sportLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+            
         // Date label
         let dateLabel = UILabel()
         dateLabel.font = UIFont.systemFont(ofSize: 17, weight: .medium)
@@ -697,7 +681,7 @@ class TeamMatchInformationViewController: UIViewController {
         dateLabel.translatesAutoresizingMaskIntoConstraints = false
         dateLabel.attributedText = formattedDateText(for: match.matchDate, isDarkMode: isDarkMode)
 
-        // Time icon and label
+        // Time icon and label - UPDATED WITH TIME RANGE
         let timeIcon = UIImageView(image: UIImage(systemName: "clock"))
         timeIcon.tintColor = .systemGray
         timeIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -707,9 +691,9 @@ class TeamMatchInformationViewController: UIViewController {
         ])
 
         let timeLabel = UILabel()
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "h:mm a"
-        timeLabel.text = "\(timeFormatter.string(from: match.matchTime))"
+        // Calculate end time by adding 1 hour to start time
+        let endTime = Calendar.current.date(byAdding: .hour, value: 1, to: match.matchTime) ?? match.matchTime
+        timeLabel.text = formatTimeRange(startTime: match.matchTime, endTime: endTime)
         timeLabel.font = UIFont.systemFont(ofSize: 17, weight: .medium)
         timeLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -733,9 +717,7 @@ class TeamMatchInformationViewController: UIViewController {
         playersGoingLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         playersGoingLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Add all to container
-        matchDetailsContainerView.addSubview(sportIcon)
-        matchDetailsContainerView.addSubview(sportLabel)
+        // Add all to container (REMOVED sportIcon and sportLabel)
         matchDetailsContainerView.addSubview(dateLabel)
         matchDetailsContainerView.addSubview(timeIcon)
         matchDetailsContainerView.addSubview(timeLabel)
@@ -745,19 +727,9 @@ class TeamMatchInformationViewController: UIViewController {
         // Create constraints array
         var constraints: [NSLayoutConstraint] = []
         
-        // Sport constraints
+        // Date constraints (now at the top)
         constraints.append(contentsOf: [
-            sportIcon.topAnchor.constraint(equalTo: matchDetailsContainerView.topAnchor, constant: 20),
-            sportIcon.leadingAnchor.constraint(equalTo: matchDetailsContainerView.leadingAnchor, constant: 20),
-            
-            sportLabel.centerYAnchor.constraint(equalTo: sportIcon.centerYAnchor),
-            sportLabel.leadingAnchor.constraint(equalTo: sportIcon.trailingAnchor, constant: 12),
-            sportLabel.trailingAnchor.constraint(lessThanOrEqualTo: matchDetailsContainerView.trailingAnchor, constant: -20),
-        ])
-        
-        // Date constraints
-        constraints.append(contentsOf: [
-            dateLabel.topAnchor.constraint(equalTo: sportIcon.bottomAnchor, constant: 16),
+            dateLabel.topAnchor.constraint(equalTo: matchDetailsContainerView.topAnchor, constant: 20),
             dateLabel.leadingAnchor.constraint(equalTo: matchDetailsContainerView.leadingAnchor, constant: 20),
         ])
         
@@ -827,7 +799,7 @@ class TeamMatchInformationViewController: UIViewController {
         NSLayoutConstraint.activate(constraints)
         
         // Adjust container height based on content
-        let estimatedHeight = isTeamChallenge ? 200 : 170 // Adjusted heights
+        let estimatedHeight = isTeamChallenge ? 170 : 140 // Reduced heights since sport section removed
         matchDetailsContainerView.constraints.forEach { constraint in
             if constraint.firstAttribute == .height && constraint.relation == .greaterThanOrEqual {
                 constraint.constant = CGFloat(estimatedHeight)

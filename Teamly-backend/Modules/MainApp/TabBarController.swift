@@ -15,16 +15,13 @@ class TabBarController: UITabBarController, UITabBarControllerDelegate {
         self.delegate = self
         setupTabs()
         setupTabBarAppearance()
-        
-        // Register for trait changes (iOS 17+)
+
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, previousTraitCollection: UITraitCollection) in
             if self.traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
                 self.updateTabBarColors()
             }
         }
     }
-
-    // Remove the traitCollectionDidChange method entirely
 
     // MARK: - Setup
     private func setupTabs() {
@@ -67,37 +64,31 @@ class TabBarController: UITabBarController, UITabBarControllerDelegate {
     // MARK: - Public/Internal Methods
     func updateTabBarColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Tab Bar Background
+
         tabBar.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Tab Bar Item Appearance
+
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Add a subtle shadow/separator in light mode
+
         if !isDarkMode {
             appearance.shadowColor = UIColor(white: 0.9, alpha: 1.0)
             appearance.shadowImage = UIImage()
         }
-        
-        // Normal state (unselected) - Update colors for both modes
+
         appearance.stackedLayoutAppearance.normal.iconColor = isDarkMode ? .primaryWhite : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
         appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
             .foregroundColor: isDarkMode ? UIColor.primaryWhite : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0),
             .font: UIFont.systemFont(ofSize: 12, weight: .medium)
         ]
-        
-        // Selected state - Keep systemGreenDark for dark mode, use systemGreen for light mode
+
         let selectedColor = isDarkMode ? UIColor.systemGreenDark : UIColor.systemGreen
         appearance.stackedLayoutAppearance.selected.iconColor = selectedColor
         appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
             .foregroundColor: selectedColor,
             .font: UIFont.systemFont(ofSize: 12, weight: .semibold)
         ]
-        
-        // Apply the appearance
+
         tabBar.standardAppearance = appearance
         if #available(iOS 15.0, *) {
             tabBar.scrollEdgeAppearance = appearance
@@ -106,29 +97,25 @@ class TabBarController: UITabBarController, UITabBarControllerDelegate {
 
     private func createNavController(title: String, image: UIImage?, selectedImage: UIImage?, viewController: UIViewController) -> UINavigationController {
         let navController = UINavigationController(rootViewController: viewController)
-        
-        // Configure tab bar item
+
         navController.tabBarItem = UITabBarItem(
             title: title,
             image: image?.withRenderingMode(.alwaysTemplate),
             selectedImage: selectedImage?.withRenderingMode(.alwaysTemplate)
         )
-        
-        // Navigation bar appearance - Support both dark and light modes
+
         let navAppearance = UINavigationBarAppearance()
         navAppearance.configureWithOpaqueBackground()
         
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         navAppearance.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Set title color based on mode
+
         let titleColor = isDarkMode ? UIColor.primaryWhite : UIColor.primaryBlack
         navAppearance.titleTextAttributes = [
             .foregroundColor: titleColor,
             .font: UIFont.systemFont(ofSize: 17, weight: .semibold)
         ]
-        
-        // Set tint color for bar button items
+
         let tintColor = isDarkMode ? UIColor.systemGreenDark : UIColor.systemGreen
         navController.navigationBar.tintColor = tintColor
         
@@ -175,97 +162,4 @@ struct TabBarControllerRepresentable: UIViewControllerRepresentable {
     }
 }
 #endif
-
-
-// Placeholders
-
-
-//import UIKit
-//
-//class HomeViewController: UIViewController {
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        title = "Home"
-//        
-//        let label = UILabel()
-//        label.text = "Home Screen"
-//        label.textAlignment = .center
-//        label.font = .systemFont(ofSize: 20, weight: .medium)
-//        label.translatesAutoresizingMaskIntoConstraints = false
-//        
-//        view.addSubview(label)
-//        NSLayoutConstraint.activate([
-//            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
-//    }
-//}
-
-//import UIKit
-//
-//class MatchViewController: UIViewController {
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        title = "Match"
-//        
-//        let label = UILabel()
-//        label.text = "Match Screen"
-//        label.textAlignment = .center
-//        label.font = .systemFont(ofSize: 20, weight: .medium)
-//        label.translatesAutoresizingMaskIntoConstraints = false
-//        
-//        view.addSubview(label)
-//        NSLayoutConstraint.activate([
-//            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
-//    }
-//}
-//
-//import UIKit
-//
-//class TeamViewController: UIViewController {
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        title = "Team"
-//        
-//        let label = UILabel()
-//        label.text = "Team Screen"
-//        label.textAlignment = .center
-//        label.font = .systemFont(ofSize: 20, weight: .medium)
-//        label.translatesAutoresizingMaskIntoConstraints = false
-//        
-//        view.addSubview(label)
-//        NSLayoutConstraint.activate([
-//            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
-//    }
-//}
-
-//import UIKit
-//
-//class ProfileViewController: UIViewController {
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        title = "Profile"
-//        
-//        let label = UILabel()
-//        label.text = "Profile Screen"
-//        label.textAlignment = .center
-//        label.font = .systemFont(ofSize: 20, weight: .medium)
-//        label.translatesAutoresizingMaskIntoConstraints = false
-//        
-//        view.addSubview(label)
-//        NSLayoutConstraint.activate([
-//            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
-//    }
-//}
-//
 

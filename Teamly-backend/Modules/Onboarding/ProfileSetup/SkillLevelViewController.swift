@@ -58,8 +58,7 @@ class SkillLevelViewController: UIViewController {
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
     }()
-    
-    // Main container for slider and labels
+
     private let sliderContentContainer: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -81,7 +80,7 @@ class SkillLevelViewController: UIViewController {
         var config = UIButton.Configuration.filled()
         
         var title = AttributedString("Next")
-        title.font = .systemFont(ofSize: 20, weight: .semibold) // bigger + bolder
+        title.font = .systemFont(ofSize: 20, weight: .semibold)
         config.attributedTitle = title
         
         config.baseBackgroundColor = .systemGreen
@@ -105,7 +104,7 @@ class SkillLevelViewController: UIViewController {
     // MARK: - Properties
     private let selectedSports: [Sport]
     private var currentSportIndex: Int = 0
-    private var skillLevelsForSports: [String: String] = [:] // Store skill levels for each sport
+    private var skillLevelsForSports: [String: String] = [:]
     private var selectedSkillLevel: String?
     private let skillLevels = ["Beginner", "Intermediate", "Experienced", "Advanced"]
     private let skillLevelColors: [UIColor] = [
@@ -155,15 +154,13 @@ class SkillLevelViewController: UIViewController {
     
     // MARK: - Setup
     private func setupUI() {
-        // Set initial background color
         view.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .primaryBlack : .primaryWhite
         
         view.addSubview(topGreenTint)
         topGreenTint.layer.addSublayer(gradientLayer)
         
         view.addSubview(progressView)
-        
-        // Setup title stack view with info button
+
         titleStackView.addArrangedSubview(titleLabel)
         titleStackView.addArrangedSubview(infoButton)
         view.addSubview(titleStackView)
@@ -176,7 +173,7 @@ class SkillLevelViewController: UIViewController {
     
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            // Top Green Tint - extends from top to just above the Next button
+            // Top Green Tint
             topGreenTint.topAnchor.constraint(equalTo: view.topAnchor),
             topGreenTint.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topGreenTint.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -201,19 +198,19 @@ class SkillLevelViewController: UIViewController {
             sportEmojiLabel.topAnchor.constraint(equalTo: titleStackView.bottomAnchor, constant: 10),
             sportEmojiLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                         
-            // Slider Content Container - Adjusted position
+            // Slider Content Container
             sliderContentContainer.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             sliderContentContainer.topAnchor.constraint(equalTo: sportEmojiLabel.bottomAnchor, constant: 20),
             sliderContentContainer.widthAnchor.constraint(equalToConstant: 250),
             sliderContentContainer.heightAnchor.constraint(equalToConstant: 420),
             
-            // Vertical Slider - Increased width to accommodate vertical oval
+            // Vertical Slider
             verticalSlider.trailingAnchor.constraint(equalTo: sliderContentContainer.trailingAnchor, constant: -0),
             verticalSlider.centerYAnchor.constraint(equalTo: sliderContentContainer.centerYAnchor),
             verticalSlider.widthAnchor.constraint(equalToConstant: 8),
             verticalSlider.heightAnchor.constraint(equalToConstant: 380),
             
-            // Skill Level Markers - on the LEFT side
+            // Skill Level Markers
             skillLevelMarkersStackView.leadingAnchor.constraint(equalTo: sliderContentContainer.leadingAnchor),
             skillLevelMarkersStackView.trailingAnchor.constraint(equalTo: verticalSlider.leadingAnchor, constant: -70),
             skillLevelMarkersStackView.topAnchor.constraint(equalTo: verticalSlider.topAnchor),
@@ -230,25 +227,19 @@ class SkillLevelViewController: UIViewController {
     // MARK: - Color Updates
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update view background
+
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Update progress view track color
+
         progressView.trackTintColor = isDarkMode ?
             UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0) :
             UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1.0)
-        
-        // Update title label color
+
         titleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update info button color
+
         infoButton.tintColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update sport emoji label
+
         sportEmojiLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update marker labels
+
         updateMarkerColors()
     }
     
@@ -262,7 +253,6 @@ class SkillLevelViewController: UIViewController {
                 UIColor.clear.cgColor
             ]
         } else {
-            // For light mode, use light green with reduced alpha
             let lightGreen = UIColor(red: 53/255, green: 199/255, blue: 89/255, alpha: 0.3)
             gradientLayer.colors = [
                 lightGreen.cgColor,
@@ -279,30 +269,22 @@ class SkillLevelViewController: UIViewController {
         guard currentSportIndex < selectedSports.count else { return }
         
         let currentSport = selectedSports[currentSportIndex]
-        
-        // Update the emoji
+
         sportEmojiLabel.text = currentSport.emoji
-        
-        // Calculate progress within the 80% range
-        // Base is 80% for this screen (4th out of 5 screens)
+
         let baseProgress: Float = 0.8
-            
-        // Calculate progress within current sports (0 to 1)
+
         let sportProgress = Float(currentSportIndex) / Float(selectedSports.count)
-            
-        // Final progress = 80% base + (20% * sportProgress)
+
         let progress = 0.8 + (0.2 * sportProgress)
             
         progressView.setProgress(progress, animated: true)
 
-        
-        // If we have a saved skill level for this sport, set the slider
         if let savedSkillLevel = skillLevelsForSports[currentSport.name],
            let savedIndex = skillLevels.firstIndex(of: savedSkillLevel) {
             verticalSlider.value = Float(savedIndex)
             updateSliderAppearance()
         } else {
-            // Reset slider to default (beginner)
             verticalSlider.value = 0
             updateSliderAppearance()
         }
@@ -317,11 +299,9 @@ class SkillLevelViewController: UIViewController {
         verticalSlider.valueChanged = { [weak self] value in
             self?.handleSliderValueChanged(value)
         }
-        
-        // Create markers for each skill level
+
         setupSkillLevelMarkers()
-        
-        // Update initial appearance
+
         updateSliderAppearance()
     }
 

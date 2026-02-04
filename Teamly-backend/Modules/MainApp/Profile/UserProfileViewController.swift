@@ -18,6 +18,10 @@ class UserProfileViewController: UIViewController {
     private var userProfile: Profile?
     private var userTeams: [BackendTeam] = []
     private var userSports: [SportWithSkill] = []
+    private var currentUserId: String = ""
+    private var currentUserName: String = ""
+    private var isFriend: Bool = false
+    private var hasPendingRequest: Bool = false
     
     // MARK: - UI Components
     private let topGreenTint: UIView = {
@@ -111,13 +115,10 @@ class UserProfileViewController: UIViewController {
         return label
     }()
     
-    // NEW: Send Request Button
-    private let sendRequestButton: UIButton = {
+    // Action Button (Send Request/Friend/Pending)
+    private let actionButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.setTitle("Send Request", for: .normal)
-        button.backgroundColor = .systemGreen
-        button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
         button.layer.cornerRadius = 12
         button.clipsToBounds = true
@@ -169,10 +170,12 @@ class UserProfileViewController: UIViewController {
         setupUI()
         updateColors()
         setupBackButton()
-        setupSendRequestButton() // NEW: Setup button action
         
-        // Start loading data
+        // Get current user info first
         Task {
+            await getCurrentUserInfo()
+            
+            // Then start loading profile data (which will check friendship status)
             await fetchUserProfileData()
         }
     }
@@ -193,6 +196,7 @@ class UserProfileViewController: UIViewController {
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
             updateColors()
             updateGradientColors()
+            updateActionButtonAppearance()
         }
     }
     
@@ -214,7 +218,7 @@ class UserProfileViewController: UIViewController {
         contentView.addSubview(nameLabel)
         contentView.addSubview(ageLabel)
         contentView.addSubview(genderLabel)
-        contentView.addSubview(sendRequestButton) // NEW: Add button to view hierarchy
+        contentView.addSubview(actionButton)
         contentView.addSubview(teamsLabel)
         contentView.addSubview(teamsStackView)
         contentView.addSubview(sportsLabel)
@@ -227,9 +231,81 @@ class UserProfileViewController: UIViewController {
         backButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
     }
     
-    // NEW: Setup send request button action
-    private func setupSendRequestButton() {
-        sendRequestButton.addTarget(self, action: #selector(sendRequestButtonTapped), for: .touchUpInside)
+    // Get current user info
+    private func getCurrentUserInfo() async {
+        do {
+            let session = try await SupabaseManager.shared.client.auth.session
+            currentUserId = session.user.id.uuidString
+            
+            // Get current user's name from profiles table
+            let response = try await supabase
+                .from("profiles")
+                .select("name")
+                .eq("id", value: currentUserId)
+                .single()
+                .execute()
+            
+            let profileData: [String: Any] = try JSONSerialization.jsonObject(with: response.data, options: []) as? [String: Any] ?? [:]
+            currentUserName = profileData["name"] as? String ?? "User"
+            
+            print("✅ Current user: \(currentUserName), ID: \(currentUserId)")
+            
+        } catch {
+            print("❌ ERROR fetching current user: \(error)")
+            currentUserId = ""
+            currentUserName = "User"
+        }
+    }
+    
+    // Setup action button based on relationship status
+    private func setupActionButton() {
+        // Check if this is the current user's own profile
+        if let userId = userId, userId.uuidString == currentUserId {
+            // This is the current user's own profile - hide the button
+            actionButton.isHidden = true
+            return
+        }
+        
+        actionButton.isHidden = false
+        
+        if isFriend {
+            // User is already a friend - show Friend label (non-interactive)
+            actionButton.setTitle("Friend", for: .normal)
+            actionButton.isUserInteractionEnabled = false
+            print("✅ Showing 'Friend' button for user")
+        } else if hasPendingRequest {
+            // There's a pending request - show Request Sent (non-interactive)
+            actionButton.setTitle("Request Sent", for: .normal)
+            actionButton.isUserInteractionEnabled = false
+            print("✅ Showing 'Request Sent' button for user")
+        } else {
+            // User is not a friend - show Send Request button
+            actionButton.setTitle("Send Request", for: .normal)
+            actionButton.addTarget(self, action: #selector(sendRequestButtonTapped), for: .touchUpInside)
+            actionButton.isUserInteractionEnabled = true
+            print("✅ Showing 'Send Request' button for user")
+        }
+        
+        updateActionButtonAppearance()
+    }
+    
+    private func updateActionButtonAppearance() {
+        let isDarkMode = traitCollection.userInterfaceStyle == .dark
+        
+        if isFriend {
+            // Friend button appearance - GREEN TEXT with appropriate background
+            actionButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+            actionButton.setTitleColor(.systemGreen, for: .normal)
+            print("✅ Friend button: Dark mode: \(isDarkMode), BG: \(isDarkMode ? "secondaryDark" : "secondaryLight"), Text: systemGreen")
+        } else if hasPendingRequest {
+            // Request Sent button appearance
+            actionButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+            actionButton.setTitleColor(.systemGray, for: .normal)
+        } else {
+            // Send Request button appearance
+            actionButton.backgroundColor = .systemGreen
+            actionButton.setTitleColor(.white, for: .normal)
+        }
     }
     
     @objc private func backButtonTapped() {
@@ -240,21 +316,97 @@ class UserProfileViewController: UIViewController {
         }
     }
     
-    // NEW: Send request button action handler
+    // Send request button action handler
     @objc private func sendRequestButtonTapped() {
-        print("Send Request button tapped")
-        // TODO: Implement request sending logic
-        showRequestSentAlert()
+        Task {
+            await sendFriendRequest()
+        }
     }
     
-    private func showRequestSentAlert() {
+    // MARK: - Friend Request Logic
+    private func sendFriendRequest() async {
+        guard let userId = userId else {
+            showError(message: "User ID not found")
+            return
+        }
+        
+        guard !currentUserId.isEmpty else {
+            showError(message: "Unable to identify current user")
+            return
+        }
+        
+        // Don't allow sending request to yourself
+        if userId.uuidString == currentUserId {
+            showError(message: "Cannot send friend request to yourself")
+            return
+        }
+        
+        do {
+            // 1. Check if friend request already exists
+            let existingResponse = try await supabase
+                .from("friends")
+                .select("*")
+                .or("and(user_id.eq.\(currentUserId),friend_id.eq.\(userId.uuidString)),and(user_id.eq.\(userId.uuidString),friend_id.eq.\(currentUserId))")
+                .execute()
+            
+            let existingRequests = try JSONDecoder().decode([[String: AnyCodable]].self, from: existingResponse.data)
+            
+            if !existingRequests.isEmpty {
+                showError(message: "Friend request already exists")
+                return
+            }
+            
+            // 2. Create friend request in friends table
+            let friendRequest = [
+                "user_id": currentUserId,
+                "friend_id": userId.uuidString,
+                "status": "pending"
+            ]
+            
+            let friendResponse = try await supabase
+                .from("friends")
+                .insert(friendRequest)
+                .execute()
+            
+            print("✅ Friend request created in friends table")
+            
+            // 3. Create notification for the receiver
+            let notification = [
+                "sender_id": currentUserId,
+                "receiver_id": userId.uuidString,
+                "type": "friend_request",
+                "message": "\(currentUserName) has sent you a friend request"
+            ]
+            
+            let notificationResponse = try await supabase
+                .from("notifications")
+                .insert(notification)
+                .execute()
+            
+            print("✅ Notification created for receiver")
+            
+            // 4. Update UI
+            hasPendingRequest = true
+            await MainActor.run {
+                setupActionButton()
+                showSuccessAlert(message: "Friend request sent successfully!")
+            }
+            
+        } catch {
+            print("❌ ERROR sending friend request: \(error)")
+            await MainActor.run {
+                showError(message: "Failed to send friend request. Please try again.")
+            }
+        }
+    }
+    
+    private func showSuccessAlert(message: String) {
         let alert = UIAlertController(
-            title: "Request Sent",
-            message: "Your connection request has been sent successfully.",
+            title: "Success",
+            message: message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
         present(alert, animated: true)
     }
     
@@ -281,7 +433,10 @@ class UserProfileViewController: UIViewController {
                 .execute()
                 .value
             
-            // 2. Fetch user's teams
+            // 2. Check friendship status and pending requests
+            await checkRelationshipStatus()
+            
+            // 3. Fetch user's teams
             let teamMembers: [TeamMember] = try await supabase
                 .from("team_members")
                 .select()
@@ -302,7 +457,7 @@ class UserProfileViewController: UIViewController {
             }
             userTeams = teams
             
-            // 3. Fetch user's preferred sports with skill levels
+            // 4. Fetch user's preferred sports with skill levels
             let preferredSports: [UserPreferredSport] = try await supabase
                 .from("user_preferred_sports")
                 .select("sport_id, skill_level")
@@ -330,7 +485,7 @@ class UserProfileViewController: UIViewController {
             }
             userSports = sportsWithSkills
             
-            // 4. Update UI with fetched data
+            // 5. Update UI with fetched data
             await MainActor.run {
                 updateUIWithFetchedData()
                 loadingIndicator.stopAnimating()
@@ -341,6 +496,61 @@ class UserProfileViewController: UIViewController {
             await MainActor.run {
                 loadingIndicator.stopAnimating()
                 showError(message: "Failed to load profile data. Please try again.")
+            }
+        }
+    }
+    
+    // Check relationship status (friend or pending request)
+    private func checkRelationshipStatus() async {
+        guard let userId = userId else { return }
+        guard !currentUserId.isEmpty else { return }
+        
+        // Don't check if it's the current user
+        if userId.uuidString == currentUserId {
+            isFriend = false
+            hasPendingRequest = false
+            await MainActor.run {
+                setupActionButton()
+            }
+            return
+        }
+        
+        do {
+            // Check for accepted friendship in either direction
+            let acceptedResponse = try await supabase
+                .from("friends")
+                .select("*")
+                .or("and(user_id.eq.\(currentUserId),friend_id.eq.\(userId.uuidString),status.eq.accepted),and(user_id.eq.\(userId.uuidString),friend_id.eq.\(currentUserId),status.eq.accepted)")
+                .execute()
+            
+            let acceptedFriendships = try JSONDecoder().decode([[String: AnyCodable]].self, from: acceptedResponse.data)
+            isFriend = !acceptedFriendships.isEmpty
+            
+            // Check for pending requests from current user to this user
+            let pendingResponse = try await supabase
+                .from("friends")
+                .select("*")
+                .eq("user_id", value: currentUserId)
+                .eq("friend_id", value: userId.uuidString)
+                .eq("status", value: "pending")
+                .execute()
+            
+            let pendingRequests = try JSONDecoder().decode([[String: AnyCodable]].self, from: pendingResponse.data)
+            hasPendingRequest = !pendingRequests.isEmpty
+            
+            print("✅ Relationship status - Is friend: \(isFriend), Has pending request: \(hasPendingRequest)")
+            
+            // Update button on main thread
+            await MainActor.run {
+                setupActionButton()
+            }
+            
+        } catch {
+            print("❌ ERROR checking relationship status: \(error)")
+            isFriend = false
+            hasPendingRequest = false
+            await MainActor.run {
+                setupActionButton()
             }
         }
     }
@@ -414,13 +624,13 @@ class UserProfileViewController: UIViewController {
     private func getSkillLevelColor(_ level: String) -> UIColor {
         switch level {
         case "Beginner":
-            return UIColor(red: 52/255, green: 152/255, blue: 219/255, alpha: 1.0) // Blue
+            return .systemBlue
         case "Intermediate":
-            return UIColor(red: 46/255, green: 204/255, blue: 113/255, alpha: 1.0) // Green
+            return .systemYellow
         case "Experienced":
-            return UIColor(red: 241/255, green: 196/255, blue: 15/255, alpha: 1.0) // Yellow
+            return .systemOrange
         case "Advanced":
-            return UIColor(red: 231/255, green: 76/255, blue: 60/255, alpha: 1.0) // Red
+            return .systemRed
         default:
             return UIColor.systemGray
         }
@@ -491,16 +701,9 @@ class UserProfileViewController: UIViewController {
         let emojiLabel = UILabel()
         emojiLabel.translatesAutoresizingMaskIntoConstraints = false
         emojiLabel.text = emoji
-        emojiLabel.font = .systemFont(ofSize: 28)
+        emojiLabel.font = .systemFont(ofSize: 32)
         emojiLabel.textAlignment = .center
         emojiContainer.addSubview(emojiLabel)
-        
-//        let sportNameLabel = UILabel()
-//        sportNameLabel.translatesAutoresizingMaskIntoConstraints = false
-//        sportNameLabel.text = sportName
-//        sportNameLabel.font = .systemFont(ofSize: 16, weight: .medium)
-//        sportNameLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack
-//        rowView.addSubview(sportNameLabel)
         
         let levelBadge = UIView()
         levelBadge.translatesAutoresizingMaskIntoConstraints = false
@@ -541,7 +744,7 @@ class UserProfileViewController: UIViewController {
             levelLabel.trailingAnchor.constraint(equalTo: levelBadge.trailingAnchor, constant: -20),
             
             // Row height
-            rowView.heightAnchor.constraint(equalToConstant: 80)
+            rowView.heightAnchor.constraint(equalToConstant: 55)
         ])
         
         return rowView
@@ -573,12 +776,13 @@ class UserProfileViewController: UIViewController {
         
         updateTeamCardsColors()
         updateSportRowsColors()
+        updateActionButtonAppearance()
     }
     
     private func updateGlassButton(_ button: UIButton, isDarkMode: Bool) {
         button.backgroundColor = isDarkMode ? UIColor(white: 1, alpha: 0.1) : UIColor(white: 0, alpha: 0.05)
         button.layer.borderColor = (isDarkMode ? UIColor(white: 1, alpha: 0.2) : UIColor(white: 0, alpha: 0.1)).cgColor
-        button.tintColor = isDarkMode ? .systemGreenDark : .systemGreen
+        button.tintColor = .systemGreen
     }
     
     private func updateTeamCardsColors() {
@@ -693,13 +897,13 @@ class UserProfileViewController: UIViewController {
             genderLabel.leadingAnchor.constraint(equalTo: ageLabel.leadingAnchor),
             genderLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             
-            // NEW: Send Request Button constraints
-            sendRequestButton.topAnchor.constraint(equalTo: genderLabel.bottomAnchor, constant: 16),
-            sendRequestButton.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
-            sendRequestButton.widthAnchor.constraint(equalToConstant: 150),
-            sendRequestButton.heightAnchor.constraint(equalToConstant: 25),
+            // Action Button constraints
+            actionButton.topAnchor.constraint(equalTo: genderLabel.bottomAnchor, constant: 16),
+            actionButton.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            actionButton.widthAnchor.constraint(equalToConstant: 150),
+            actionButton.heightAnchor.constraint(equalToConstant: 25),
             
-            teamsLabel.topAnchor.constraint(equalTo: sendRequestButton.bottomAnchor, constant: 32), // Updated from avatarView to sendRequestButton
+            teamsLabel.topAnchor.constraint(equalTo: actionButton.bottomAnchor, constant: 32),
             teamsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             teamsLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             

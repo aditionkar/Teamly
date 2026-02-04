@@ -1,37 +1,47 @@
 //
 //  NotificationsViewController.swift
-//  Practice - teamly
+//  Teamly-backend
 //
-//  Created by user@37 on 19/12/25.
+//  Created by user@37 on 04/02/26.
 //
 
 import UIKit
+import Supabase
 
 class NotificationsViewController: UIViewController {
     
     // MARK: - Models
-    enum NotificationType {
-        case info
-        case teamRequest
-        case friendRequest
+    enum NotificationType: String {
+        case friendRequest = "friend_request"
+        case friendRequestAccepted = "friend_request_accepted"
+        case friendRequestDeclined = "friend_request_declined"
     }
     
     struct Notification {
-        let id: String
+        let id: Int
+        let senderId: UUID
+        let receiverId: UUID
         let userName: String
         let message: String
-        let time: String
         let type: NotificationType
+        let createdAt: Date
         var isExpanded: Bool = false
-        let teamName: String?
     }
     
+    struct NotificationInsert: Encodable {
+        let sender_id: UUID
+        let receiver_id: UUID
+        let type: String
+        let message: String
+        let created_at: String
+        let updated_at: String
+    }
+    
+    
     // MARK: - Properties
-    private var notifications: [Notification] = [
-        Notification(id: "1", userName: "Daksh", message: "has requested you to...", time: "10:01 AM", type: .teamRequest, teamName: "ALL Stars FC"),
-        Notification(id: "2", userName: "Aditi", message: "has sent you a friend...", time: "9:41 AM", type: .friendRequest, teamName: nil),
-        Notification(id: "3", userName: "Disha", message: "has posted a cricket...", time: "5:33 PM", type: .info, teamName: nil)
-    ]
+    private var notifications: [Notification] = []
+    private let supabase = SupabaseManager.shared.client
+    private var currentUserId: UUID? = nil
     
     // MARK: - UI Components
     private let topGreenTint: UIView = {
@@ -74,12 +84,26 @@ class NotificationsViewController: UIViewController {
         return table
     }()
     
+    private let loadingIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupTableView()
-        updateColors()
+        fetchCurrentUserId()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if currentUserId != nil {
+            fetchNotifications()
+        }
     }
     
     override func viewDidLayoutSubviews() {
@@ -108,6 +132,7 @@ class NotificationsViewController: UIViewController {
         view.addSubview(glassBackButton)
         view.addSubview(titleLabel)
         view.addSubview(tableView)
+        view.addSubview(loadingIndicator)
         
         glassBackButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
         
@@ -129,7 +154,10 @@ class NotificationsViewController: UIViewController {
             tableView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 24),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
     
@@ -137,6 +165,373 @@ class NotificationsViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(NotificationCell.self, forCellReuseIdentifier: "NotificationCell")
+    }
+    
+    // MARK: - Data Fetching
+    private func fetchCurrentUserId() {
+        Task {
+            do {
+                let session = try await supabase.auth.session
+                currentUserId = session.user.id
+                await MainActor.run {
+                    fetchNotifications()
+                }
+            } catch {
+                print("Error fetching user session: \(error)")
+                await MainActor.run {
+                    showError("Failed to load user session")
+                }
+            }
+        }
+    }
+    
+    private func fetchNotifications() {
+        guard let userId = currentUserId else {
+            showError("User not logged in")
+            return
+        }
+        
+        loadingIndicator.startAnimating()
+        
+        Task {
+            do {
+                // Fetch notifications where the current user is the receiver
+                let fetchedNotifications: [SupabaseNotification] = try await supabase
+                    .from("notifications")
+                    .select()
+                    .eq("receiver_id", value: userId)
+                    .order("created_at", ascending: false)
+                    .execute()
+                    .value
+                
+                // Transform Supabase data to our Notification model
+                var transformedNotifications: [Notification] = []
+                
+                for fetchedNotif in fetchedNotifications {
+                    // Parse the message to extract name and actual message
+                    let (userName, message) = parseNotificationMessage(fetchedNotif.message)
+                    
+                    // Fetch sender's name from profiles table using your existing Profile struct
+                    let senderName = try await fetchUserName(userId: fetchedNotif.senderId)
+                    
+                    // Use the sender's actual name instead of parsed name for consistency
+                    let finalName = senderName ?? userName
+                    
+                    guard let type = NotificationType(rawValue: fetchedNotif.type) else {
+                        continue
+                    }
+                    
+                    let notification = Notification(
+                        id: fetchedNotif.id,
+                        senderId: fetchedNotif.senderId,
+                        receiverId: fetchedNotif.receiverId,
+                        userName: finalName,
+                        message: message,
+                        type: type,
+                        createdAt: fetchedNotif.createdAt
+                    )
+                    
+                    transformedNotifications.append(notification)
+                }
+                
+                await MainActor.run {
+                    self.notifications = transformedNotifications
+                    self.loadingIndicator.stopAnimating()
+                    self.tableView.reloadData()
+                    
+                    if transformedNotifications.isEmpty {
+                        self.showEmptyState()
+                    }
+                }
+                
+            } catch {
+                print("Error fetching notifications: \(error)")
+                await MainActor.run {
+                    self.loadingIndicator.stopAnimating()
+                    self.showError("Failed to load notifications")
+                }
+            }
+        }
+    }
+    
+    private func fetchUserName(userId: UUID) async throws -> String? {
+        do {
+            // Using your existing Profile struct from other file
+            let profile: Profile? = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: userId)
+                .single()
+                .execute()
+                .value
+            
+            return profile?.name // Changed from fullName to name to match your Profile struct
+        } catch {
+            print("Error fetching user name: \(error)")
+            return nil
+        }
+    }
+    
+    private func parseNotificationMessage(_ fullMessage: String) -> (name: String, message: String) {
+        // Split the message by spaces
+        let components = fullMessage.components(separatedBy: " ")
+        
+        guard components.count > 1 else {
+            return ("", fullMessage)
+        }
+        
+        // First word is the name
+        let name = components[0]
+        
+        // Rest is the message
+        let message = components[1...].joined(separator: " ")
+        
+        return (name, message)
+    }
+    
+    private func handleFriendRequestAction(notificationId: Int, action: String, cell: NotificationCell) {
+        guard let notification = notifications.first(where: { $0.id == notificationId }) else { return }
+        
+        Task {
+            do {
+                // 1. Update the existing notification type in database
+                let updateType: String = action == "accept" ? "friend_request_accepted" : "friend_request_declined"
+                
+                struct NotificationUpdate: Encodable {
+                    let type: String
+                    let updated_at: String
+                }
+                
+                let updateData = NotificationUpdate(
+                    type: updateType,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
+
+                try await supabase
+                    .from("notifications")
+                    .update(updateData)
+                    .eq("id", value: notificationId)
+                    .execute()
+                
+                // 2. Create a new notification for the sender (interchanged sender/receiver)
+                let senderName = try await fetchUserName(userId: notification.senderId)
+                let receiverName = try await fetchUserName(userId: notification.receiverId)
+                
+                let newNotificationMessage: String
+                if action == "accept" {
+                    newNotificationMessage = "\(receiverName ?? "User") accepted your friend request"
+                } else {
+                    newNotificationMessage = "\(receiverName ?? "User") declined your friend request"
+                }
+                
+                let newNotification = NotificationInsert(
+                    sender_id: notification.receiverId, // Interchanged: original receiver becomes sender
+                    receiver_id: notification.senderId, // Interchanged: original sender becomes receiver
+                    type: updateType,
+                    message: newNotificationMessage,
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("notifications")
+                    .insert(newNotification)
+                    .execute()
+                
+                // 3. Handle friends table based on action
+                if action == "accept" {
+                    try await createAcceptedFriendship(senderId: notification.senderId, receiverId: notification.receiverId)
+                } else {
+                    // For decline, just delete any existing pending friend request
+                    try await deletePendingFriendship(senderId: notification.senderId, receiverId: notification.receiverId)
+                }
+                
+                await MainActor.run {
+                    // Remove the notification from local array
+                    notifications.removeAll { $0.id == notificationId }
+                    tableView.reloadData()
+                    
+                    if action == "accept" {
+                        // Show success message
+                        showAlert(title: "Friend Request Accepted", message: "You and \(notification.userName) are now friends!")
+                    } else {
+                        // Show declined message
+                        showAlert(title: "Friend Request Declined", message: "You declined \(notification.userName)'s friend request.")
+                    }
+                }
+                
+            } catch {
+                print("Error handling friend request: \(error)")
+                await MainActor.run {
+                    showError("Failed to process friend request")
+                }
+            }
+        }
+    }
+    
+    private func createAcceptedFriendship(senderId: UUID, receiverId: UUID) async throws {
+        // Create a new struct for friendship updates that excludes the id
+        struct FriendshipUpdate: Encodable {
+            let user_id: UUID
+            let friend_id: UUID
+            let status: String
+            let created_at: String
+            let updated_at: String
+        }
+        
+        // Create two rows in friends table for bidirectional friendship
+        
+        // First friendship: sender -> receiver
+        let friendship1 = FriendshipUpdate(
+            user_id: senderId,
+            friend_id: receiverId,
+            status: "accepted",
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        // Second friendship: receiver -> sender
+        let friendship2 = FriendshipUpdate(
+            user_id: receiverId,
+            friend_id: senderId,
+            status: "accepted",
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        // Try to update existing records first, if they exist
+        do {
+            // Check if sender->receiver friendship exists
+            let existingFriendship1: Friendship? = try await supabase
+                .from("friends")
+                .select()
+                .eq("user_id", value: senderId)
+                .eq("friend_id", value: receiverId)
+                .single()
+                .execute()
+                .value
+            
+            if let existing = existingFriendship1 {
+                // Update existing record
+                let updatedFriendship1 = FriendshipUpdate(
+                    user_id: existing.user_id,
+                    friend_id: existing.friend_id,
+                    status: "accepted",
+                    created_at: existing.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("friends")
+                    .update(updatedFriendship1)
+                    .eq("id", value: existing.id)
+                    .execute()
+            } else {
+                // Insert new record
+                try await supabase
+                    .from("friends")
+                    .insert(friendship1)
+                    .execute()
+            }
+            
+            // Check if receiver->sender friendship exists
+            let existingFriendship2: Friendship? = try await supabase
+                .from("friends")
+                .select()
+                .eq("user_id", value: receiverId)
+                .eq("friend_id", value: senderId)
+                .single()
+                .execute()
+                .value
+            
+            if let existing = existingFriendship2 {
+                // Update existing record
+                let updatedFriendship2 = FriendshipUpdate(
+                    user_id: existing.user_id,
+                    friend_id: existing.friend_id,
+                    status: "accepted",
+                    created_at: existing.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("friends")
+                    .update(updatedFriendship2)
+                    .eq("id", value: existing.id)
+                    .execute()
+            } else {
+                // Insert new record
+                try await supabase
+                    .from("friends")
+                    .insert(friendship2)
+                    .execute()
+            }
+            
+            print("Created/updated bidirectional friendships: \(senderId) ↔ \(receiverId)")
+            
+        } catch {
+            // If single() fails (no records), insert both new records
+            if let supabaseError = error as? PostgrestError,
+               supabaseError.code == "PGRST116" { // No rows found
+                try await supabase
+                    .from("friends")
+                    .insert([friendship1, friendship2])
+                    .execute()
+                
+                print("Created new bidirectional friendships: \(senderId) ↔ \(receiverId)")
+            } else {
+                throw error
+            }
+        }
+    }
+
+    private func deletePendingFriendship(senderId: UUID, receiverId: UUID) async throws {
+        // Delete any pending friend requests between these users
+        // We only delete if status is 'pending'
+        
+        try await supabase
+            .from("friends")
+            .delete()
+            .eq("user_id", value: senderId)
+            .eq("friend_id", value: receiverId)
+            .eq("status", value: "pending")
+            .execute()
+        
+        print("Deleted pending friendship request: \(senderId) → \(receiverId)")
+    }
+    
+    private func createFriendship(senderId: UUID, receiverId: UUID) async throws {
+        // This function now redirects to createAcceptedFriendship
+        try await createAcceptedFriendship(senderId: senderId, receiverId: receiverId)
+    }
+    
+    // MARK: - Helper Methods
+    private func showError(_ message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    private func showEmptyState() {
+        let emptyLabel = UILabel()
+        emptyLabel.text = "No notifications yet"
+        emptyLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack
+        emptyLabel.textAlignment = .center
+        emptyLabel.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        tableView.backgroundView = emptyLabel
+        
+        NSLayoutConstraint.activate([
+            emptyLabel.centerXAnchor.constraint(equalTo: tableView.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor)
+        ])
     }
     
     // MARK: - Color Updates
@@ -154,6 +549,9 @@ class NotificationsViewController: UIViewController {
         
         // Update table view background
         tableView.backgroundColor = .clear
+        
+        // Update loading indicator
+        loadingIndicator.color = isDarkMode ? .primaryWhite : .primaryBlack
     }
     
     private func updateGradientColors() {
@@ -222,12 +620,55 @@ extension NotificationsViewController: UITableViewDelegate, UITableViewDataSourc
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let notification = notifications[indexPath.row]
+        var notification = notifications[indexPath.row]
         
-        if notification.type == .teamRequest || notification.type == .friendRequest || notification.type == .info {
+        if notification.type == .friendRequest {
+            notification.isExpanded.toggle()
             notifications[indexPath.row].isExpanded.toggle()
             tableView.reloadRows(at: [indexPath], with: .automatic)
         }
+    }
+    
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { [weak self] (action, view, completionHandler) in
+            guard let self = self else { return }
+            
+            let notification = self.notifications[indexPath.row]
+            
+            Task {
+                do {
+                    // Delete from database
+                    try await self.supabase
+                        .from("notifications")
+                        .delete()
+                        .eq("id", value: notification.id)
+                        .execute()
+                    
+                    await MainActor.run {
+                        // Remove from local array
+                        self.notifications.remove(at: indexPath.row)
+                        self.tableView.deleteRows(at: [indexPath], with: .fade)
+                        
+                        if self.notifications.isEmpty {
+                            self.showEmptyState()
+                        }
+                    }
+                    
+                    completionHandler(true)
+                } catch {
+                    print("Error deleting notification: \(error)")
+                    await MainActor.run {
+                        self.showError("Failed to delete notification")
+                        completionHandler(false)
+                    }
+                }
+            }
+        }
+        
+        deleteAction.backgroundColor = .systemRed
+        deleteAction.image = UIImage(systemName: "trash.fill")
+        
+        return UISwipeActionsConfiguration(actions: [deleteAction])
     }
 }
 
@@ -235,12 +676,33 @@ extension NotificationsViewController: UITableViewDelegate, UITableViewDataSourc
 extension NotificationsViewController: NotificationCellDelegate {
     func notificationCell(_ cell: NotificationCell, didTapAccept notification: Notification) {
         print("Accepted: \(notification.userName)")
-        // Handle accept action
+        handleFriendRequestAction(notificationId: notification.id, action: "accept", cell: cell)
     }
     
     func notificationCell(_ cell: NotificationCell, didTapDecline notification: Notification) {
         print("Declined: \(notification.userName)")
-        // Handle decline action
+        handleFriendRequestAction(notificationId: notification.id, action: "decline", cell: cell)
+    }
+}
+
+// MARK: - Supabase Models
+struct SupabaseNotification: Codable {
+    let id: Int
+    let senderId: UUID
+    let receiverId: UUID
+    let type: String
+    let message: String
+    let createdAt: Date
+    let updatedAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case senderId = "sender_id"
+        case receiverId = "receiver_id"
+        case type
+        case message
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
     }
 }
 
@@ -394,7 +856,7 @@ class NotificationCell: UITableViewCell {
         ])
         
         collapsedConstraints = [
-            containerView.heightAnchor.constraint(equalToConstant: 67)
+            containerView.heightAnchor.constraint(equalToConstant: 78)
         ]
         
         expandedConstraints = [
@@ -410,31 +872,28 @@ class NotificationCell: UITableViewCell {
         updateColors(isDarkMode: isDarkMode)
         
         nameLabel.text = notification.userName
-        timeLabel.text = notification.time
         
-        if notification.isExpanded {
-            if notification.type == .teamRequest {
-                messageLabel.text = "has requested you to join their football team \(notification.teamName ?? "")"
-                buttonStack.isHidden = false
-                NSLayoutConstraint.deactivate(collapsedConstraints)
-                NSLayoutConstraint.activate(expandedConstraints)
-            } else if notification.type == .friendRequest {
-                messageLabel.text = "has sent you a friend request."
-                buttonStack.isHidden = false
-                NSLayoutConstraint.deactivate(collapsedConstraints)
-                NSLayoutConstraint.activate(expandedConstraints)
-            } else {
-                    messageLabel.text = notification.message.replacingOccurrences(of: "...", with: " match.")
-                buttonStack.isHidden = true
-                NSLayoutConstraint.deactivate(collapsedConstraints)
-                NSLayoutConstraint.activate(expandedConstraints)
-            }
-            
+        // Format the time
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        let relativeTime = formatter.localizedString(for: notification.createdAt, relativeTo: Date())
+        timeLabel.text = relativeTime
+        
+        if notification.isExpanded && notification.type == .friendRequest {
+            messageLabel.text = notification.message
+            buttonStack.isHidden = false
+            NSLayoutConstraint.deactivate(collapsedConstraints)
+            NSLayoutConstraint.activate(expandedConstraints)
         } else {
             messageLabel.text = notification.message
             buttonStack.isHidden = true
             NSLayoutConstraint.deactivate(expandedConstraints)
             NSLayoutConstraint.activate(collapsedConstraints)
+        }
+        
+        // Hide buttons for non-friend-request notifications
+        if notification.type != .friendRequest {
+            buttonStack.isHidden = true
         }
     }
     

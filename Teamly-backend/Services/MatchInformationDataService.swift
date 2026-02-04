@@ -138,15 +138,9 @@ class MatchInformationDataService {
                 .select("*")
                 .or("and(user_id.eq.\(userId1),friend_id.eq.\(userId2),status.eq.accepted),and(user_id.eq.\(userId2),friend_id.eq.\(userId1),status.eq.accepted)")
                 .execute()
-            
-            // Debug: Print the query result
-            print("Checking friendship between \(userId1) and \(userId2)")
-            print("Response data: \(String(data: response.data, encoding: .utf8) ?? "No data")")
-            
+
             let friendships = try JSONDecoder().decode([[String: AnyCodable]].self, from: response.data)
             let isFriend = !friendships.isEmpty
-            print("Is friend: \(isFriend)")
-            
             return isFriend
             
         } catch {
@@ -188,6 +182,17 @@ class MatchInformationDataService {
             .eq("match_id", value: matchId)
             .eq("user_id", value: userId)
             .execute()
+    }
+    
+    func fetchPlayersRSVPCount(matchId: String) async throws -> Int {
+        let response = try await supabase
+            .from("match_rsvps")
+            .select("*", count: .exact)
+            .eq("match_id", value: matchId)
+            .eq("rsvp_status", value: "going")
+            .execute()
+        
+        return response.count ?? 0
     }
     
     // Send friend request

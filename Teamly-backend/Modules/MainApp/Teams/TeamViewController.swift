@@ -428,9 +428,7 @@ class TeamViewController: UIViewController {
         guard teamIndex < teams.count else { return }
         
         let selectedTeam = teams[teamIndex]
-        print("Selected team: \(selectedTeam.name)")
-        
-        // Fetch team details and members from Supabase
+
         Task {
             await loadTeamDetails(teamId: selectedTeam.id)
         }
@@ -469,17 +467,17 @@ class TeamViewController: UIViewController {
 
     private func navigateToTeamChat(team: BackendTeam, members: [TeamMember]) {
         if let navController = navigationController {
-            print("Navigation controller exists")
             let teamChatVC = TeamChatViewController()
             teamChatVC.team = team
             teamChatVC.teamMembers = members
+            teamChatVC.hidesBottomBarWhenPushed = true
             navController.pushViewController(teamChatVC, animated: true)
             navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
         } else {
-            print("No navigation controller found - presenting modally")
             let teamChatVC = TeamChatViewController()
             teamChatVC.team = team
             teamChatVC.teamMembers = members
+            teamChatVC.hidesBottomBarWhenPushed = true 
             let navController = UINavigationController(rootViewController: teamChatVC)
             navController.modalPresentationStyle = .fullScreen
             navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle

@@ -32,22 +32,17 @@ class LaunchViewController: UIViewController {
     }
     
     private func setupUI() {
-        // Set initial colors based on current mode
         updateColors()
-        
-        // Configure App Name Label
+
         appNameLabel.text = "Teamly"
         appNameLabel.font = UIFont.systemFont(ofSize: 32, weight: .bold)
         appNameLabel.textAlignment = .center
+
+        loadingBar.layer.cornerRadius = 3
         
-        // Configure Loading Bar Background
-        loadingBar.layer.cornerRadius = 3 // Increased for thicker bar
-        
-        // Configure Loading Progress
         loadingProgress.backgroundColor = .systemGreen
-        loadingProgress.layer.cornerRadius = 3 // Increased for thicker bar
-        
-        // Create main stack view for football and app name
+        loadingProgress.layer.cornerRadius = 3
+
         let mainStackView = UIStackView(arrangedSubviews: [footballImageView, appNameLabel])
         mainStackView.axis = .vertical
         mainStackView.spacing = 24
@@ -62,46 +57,35 @@ class LaunchViewController: UIViewController {
         loadingProgress.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-//            // Football image
-//            footballImageView.widthAnchor.constraint(equalToConstant: 120),
-//            footballImageView.heightAnchor.constraint(equalToConstant: 120),
-            
-            // Main stack view - centered
             mainStackView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             mainStackView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -60),
-            
-            // Loading bar - shorter and positioned below Teamly label
+
             loadingBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingBar.topAnchor.constraint(equalTo: appNameLabel.bottomAnchor, constant: 30), // Below Teamly label
-            loadingBar.widthAnchor.constraint(equalToConstant: 180), // Shorter width
-            loadingBar.heightAnchor.constraint(equalToConstant: 6), // Thicker bar
-            
-            // Loading progress (initial state - very small)
+            loadingBar.topAnchor.constraint(equalTo: appNameLabel.bottomAnchor, constant: 30),
+            loadingBar.widthAnchor.constraint(equalToConstant: 180),
+            loadingBar.heightAnchor.constraint(equalToConstant: 6),
+
             loadingProgress.leadingAnchor.constraint(equalTo: loadingBar.leadingAnchor),
             loadingProgress.topAnchor.constraint(equalTo: loadingBar.topAnchor),
             loadingProgress.bottomAnchor.constraint(equalTo: loadingBar.bottomAnchor),
-            loadingProgress.widthAnchor.constraint(equalToConstant: 1) // Start very small
+            loadingProgress.widthAnchor.constraint(equalToConstant: 1)
         ])
     }
     
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update view background
+
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Update app name label color
+
         appNameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update loading bar background
+
         loadingBar.backgroundColor = isDarkMode ? .baseWhite : UIColor(white: 0.9, alpha: 1.0)
     }
     
     private func startBounceAnimation() {
        
         footballImageView.transform = CGAffineTransform(translationX: 0, y: 40)
-        
-        // Create bigger bounce animation
+
         UIView.animate(
             withDuration: 1.0,
             delay: 0,
@@ -115,7 +99,7 @@ class LaunchViewController: UIViewController {
             completion: nil
         )
          
-        // Add subtle rotation for more dynamic effect
+        // subtle rotation for more dynamic effect
         let rotateAnimation = CABasicAnimation(keyPath: "transform.rotation")
         rotateAnimation.fromValue = -0.08
         rotateAnimation.toValue = 0.08
@@ -160,13 +144,9 @@ class LaunchViewController: UIViewController {
     }
 
     private func simulateAppLoading() {
-        // Simulate loading time (3 seconds to see multiple bounces and loading cycles)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            // Stop all animations before transitioning
             self.footballImageView.layer.removeAllAnimations()
             self.loadingProgress.layer.removeAllAnimations()
-            
-            // Transition to LandingViewController
             self.transitionToLandingViewController()
         }
     }
@@ -174,23 +154,19 @@ class LaunchViewController: UIViewController {
     private func transitionToLandingViewController() {
         let landingVC = LandingViewController()
         landingVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
-        
-        // Get the window and transition
+
         if let window = self.view.window {
             UIView.transition(with: window, duration: 1.0, options: .transitionCrossDissolve, animations: {
                 window.rootViewController = landingVC
             }, completion: nil)
         } else {
-            // Fallback: present modally
             landingVC.modalPresentationStyle = .fullScreen
             self.present(landingVC, animated: false)
         }
-        
-        // Call onComplete if it exists (for backward compatibility)
+
         self.onComplete?()
     }
-  
-    // Clean up animations when view disappears
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         footballImageView.layer.removeAllAnimations()
@@ -229,97 +205,3 @@ struct LaunchViewControllerRepresentable: UIViewControllerRepresentable {
 }
 #endif
 
-//Placeholder
-
-
-
-
-//import UIKit
-//
-//class EditTeamInformationViewController: UIViewController {
-//    
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        
-//        let titleLabel = UILabel()
-//        titleLabel.text = "EditTeamInformationViewController"
-//        titleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
-//        titleLabel.textAlignment = .center
-//        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-//        
-//        view.addSubview(titleLabel)
-//        
-//        NSLayoutConstraint.activate([
-//            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-//            titleLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-//        ])
-//    }
-//}
-
-import UIKit
-
-class NotificationsViewController: UIViewController {
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .systemBackground
-        
-        let titleLabel = UILabel()
-        titleLabel.text = "NotificationsViewController"
-        titleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
-        titleLabel.textAlignment = .center
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        view.addSubview(titleLabel)
-        
-        NSLayoutConstraint.activate([
-            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        ])
-    }
-}
-
-//class AddPlayersViewController: UIViewController {
-//    var team: BackendTeam?
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        print("AddPlayersViewController")
-//    }
-//}
-
-//class TeamMatchesViewController: UIViewController {
-//    var team: BackendTeam?
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        print("TeamMatchesViewController")
-//    }
-//}
-
-
-//// ChallengeTeamMatchViewController.swift
-//class ChallengeTeamMatchViewController: UIViewController {
-//    var currentTeam: BackendTeam?
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        print("Challenge VC - Team: \(currentTeam?.name ?? "None")")
-//    }
-//}
-
-// TeamMatchRequestViewController.swift
-//class TeamMatchRequestViewController: UIViewController {
-//    override func viewDidLoad() {
-//        super.viewDidLoad()
-//        view.backgroundColor = .systemBackground
-//        print("Match Requests VC loaded")
-//    }
-//}
-
-
-// Helper struct if needed
-struct Team {
-    var name: String?
-}

@@ -87,7 +87,6 @@ class LandingViewController: UIViewController {
     
     // MARK: - Setup
     private func setupUI() {
-        // Set initial background color based on current mode
         updateColors()
             
         view.addSubview(topGreenTint)
@@ -119,28 +118,24 @@ class LandingViewController: UIViewController {
     }
     
     private func setupTextContent() {
-        // Title Label
         titleLabel.text = "Teamly"
         titleLabel.font = UIFont.systemFont(ofSize: 32, weight: .bold)
         titleLabel.textAlignment = .center
         view.addSubview(titleLabel)
-        
-        // Subtitle Label - Italic
+
         subtitleLabel.text = "From chaos to kickoff!"
         subtitleLabel.font = UIFont.italicSystemFont(ofSize: 16)
         subtitleLabel.textAlignment = .center
         subtitleLabel.alpha = 0.8
         view.addSubview(subtitleLabel)
         
-        // Description Label
         descriptionLabel.text = "Create your account and start playing!"
         descriptionLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         descriptionLabel.textAlignment = .center
         descriptionLabel.numberOfLines = 0
         descriptionLabel.alpha = 0.7
         view.addSubview(descriptionLabel)
-        
-        // Update colors initially
+
         updateLabelColors()
     }
     
@@ -173,8 +168,6 @@ class LandingViewController: UIViewController {
             if let image = UIImage(named: imageName) {
                 imageView.image = image
             } else {
-                // Fallback image if the specific theme image doesn't exist
-                // Try to find any image with similar name
                 let fallbackName = imageName.replacingOccurrences(of: "Landing/LandingWhite", with: "Landing/Landing")
                                             .replacingOccurrences(of: "LandingWhite", with: "Landing")
                 imageView.image = UIImage(named: fallbackName) ?? UIImage(systemName: "photo")
@@ -183,16 +176,14 @@ class LandingViewController: UIViewController {
             
             containerView.addSubview(imageView)
             scrollView.addSubview(containerView)
-            
-            // Position each container view
+
             containerView.frame = CGRect(
-                x: CGFloat(index) * (view.frame.width - 80), // Account for padding
+                x: CGFloat(index) * (view.frame.width - 80),
                 y: 0,
-                width: view.frame.width - 80, // 40px padding on each side
+                width: view.frame.width - 80,
                 height: 250
             )
-            
-            // Image view fills entire container (no internal padding)
+
             imageView.frame = containerView.bounds
         }
         
@@ -212,44 +203,36 @@ class LandingViewController: UIViewController {
         getStartedButton.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            // Top Green Tint
             topGreenTint.topAnchor.constraint(equalTo: view.topAnchor),
             topGreenTint.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topGreenTint.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             topGreenTint.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            // Scroll View - Top section with horizontal padding
+
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 30),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             scrollView.heightAnchor.constraint(equalToConstant: 280),
-            
-            // Page Control - Closer to scroll view
+
             pageControl.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -30),
             pageControl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            
-            // Title Label - Closer to page control
+
             titleLabel.topAnchor.constraint(equalTo: pageControl.bottomAnchor, constant: 35),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
-            
-            // Subtitle Label - Immediately below title (small gap)
+
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
             subtitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
-            
-            // Separator Line - Above the button
+
             separatorLine.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 60),
             separatorLine.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -60),
             separatorLine.bottomAnchor.constraint(equalTo: descriptionLabel.topAnchor, constant: -20),
             separatorLine.heightAnchor.constraint(equalToConstant: 1),
-            
-            // Description Label - Above separator line
+
             descriptionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             descriptionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             descriptionLabel.bottomAnchor.constraint(equalTo: getStartedButton.topAnchor, constant: -30),
-            
-            // Get Started Button - Bottom
+
             getStartedButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 60),
             getStartedButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -60),
             getStartedButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -30),
@@ -260,17 +243,12 @@ class LandingViewController: UIViewController {
     // MARK: - Color Updates
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update view background
+
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Update separator line
+
         separatorLine.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
-        
-        // Update labels
-        updateLabelColors()
-        
-        // Update page control
+
+
         updatePageControlColors()
     }
     
@@ -287,8 +265,6 @@ class LandingViewController: UIViewController {
         
         pageControl.pageIndicatorTintColor = isDarkMode ? .tertiaryDark : .tertiaryLight
         pageControl.currentPageIndicatorTintColor = .systemGreen
-        
-        // Update page control count if needed
         pageControl.numberOfPages = imageNames.count
     }
     
@@ -344,8 +320,7 @@ class LandingViewController: UIViewController {
         
     private func showLoginModal() {
         let loginVC = LoginViewController()
-        
-        // Set up the callbacks for login
+
         loginVC.onLoginSuccess = { [weak self] in
             self?.dismiss(animated: true) {
                 self?.onGetStarted?()
@@ -353,7 +328,6 @@ class LandingViewController: UIViewController {
         }
         
         loginVC.onRegister = { [weak self] in
-            // When register is tapped in login, show register screen
             let registerVC = RegisterViewController()
             
             registerVC.onRegisterSuccess = { [weak self] in
@@ -365,35 +339,29 @@ class LandingViewController: UIViewController {
             registerVC.onLogin = { [weak self] in
                 self?.dismiss(animated: true, completion: nil)
             }
-            
-            // Configure modal presentation for register
+
             if let sheet = registerVC.sheetPresentationController {
                 let registerDetent = UISheetPresentationController.Detent.custom { context in
-                    // Height for register modal (slightly taller due to extra field)
                     return 650
                 }
                 sheet.detents = [registerDetent]
                 sheet.prefersGrabberVisible = true
                 sheet.preferredCornerRadius = 24
             }
-            
-            // Force registerVC to update its colors based on the current interface style
+
             registerVC.overrideUserInterfaceStyle = self?.traitCollection.userInterfaceStyle ?? .unspecified
             loginVC.present(registerVC, animated: true, completion: nil)
         }
-        
-        // Configure modal presentation for login
+
         if let sheet = loginVC.sheetPresentationController {
             let loginDetent = UISheetPresentationController.Detent.custom { context in
-                // Height for login modal (adjust as needed)
                 return 580
             }
             sheet.detents = [loginDetent]
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = 24
         }
-        
-        // Force loginVC to update its colors based on the current interface style
+
         loginVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
         
         present(loginVC, animated: true, completion: nil)
@@ -442,10 +410,6 @@ struct LandingViewControllerRepresentable: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: LandingViewController, context: Context) {
-        // Update the view controller if needed
     }
 }
 #endif
-
-
-//zw5hhzlFwc7f9pkb - Teamly password supabase while creating

@@ -232,20 +232,13 @@ class TeamMatchesViewController: UIViewController {
                 .in("match_type", value: ["team_internal", "team_challenge"])
                 .order("match_date", ascending: true)
                 .order("match_time", ascending: true)
-            
-            print("Fetching matches for team: \(teamId)")
-            
+
             let response: [MatchResponse] = try await query.execute().value
-            
-            print("Found \(response.count) matches")
-            
-            // Transform response into TeamMatch objects
+
             var teamMatches: [TeamMatch] = []
             
             for matchResponse in response {
-                print("Processing match: \(matchResponse.id)")
-                
-                // Convert MatchResponse to dictionary for TeamMatch.fromDictionary
+
                 var dict: [String: Any] = [
                     "id": matchResponse.id.uuidString,
                     "match_type": matchResponse.match_type,
@@ -347,8 +340,7 @@ class TeamMatchesViewController: UIViewController {
     }
     
     private func processFetchedMatches(_ matches: [TeamMatch]) {
-        print("Processing \(matches.count) fetched matches")
-        
+
         let currentDate = Date()
         
         // Filter matches into upcoming and past
@@ -369,13 +361,9 @@ class TeamMatchesViewController: UIViewController {
             let dateTime2 = combineDateAndTime(date: match2.matchDate, time: match2.matchTime)
             return dateTime1 > dateTime2 // Show most recent first
         }
-        
-        print("Upcoming matches: \(upcomingMatches.count)")
-        print("Past matches: \(pastMatches.count)")
-        
+
         // Debug print match details
         for (index, match) in upcomingMatches.enumerated() {
-            print("Upcoming match \(index + 1): \(match.venue) on \(match.matchDate)")
         }
         
         // Set initial data
@@ -475,8 +463,7 @@ class TeamMatchesViewController: UIViewController {
         } else {
             emptyStateLabel.text = "No past matches"
         }
-        
-        print("Empty state: \(isEmpty), message: \(emptyStateLabel.text ?? "")")
+
     }
     
     private func showEmptyState() {
@@ -514,7 +501,6 @@ class TeamMatchesViewController: UIViewController {
 // MARK: - UICollectionView DataSource & Delegate
 extension TeamMatchesViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        print("Current matches count: \(currentMatches.count)")
         return currentMatches.count
     }
     
@@ -524,9 +510,7 @@ extension TeamMatchesViewController: UICollectionViewDataSource, UICollectionVie
         }
         
         var match = currentMatches[indexPath.item]
-        print("Configuring cell for match: \(match.venue)")
-        
-        // Fix opponent team name if needed
+
         if let currentTeamName = team?.name {
             if match.matchType == "team_challenge" {
                 if let opponentTeamName = match.opponentTeamName,
@@ -543,8 +527,7 @@ extension TeamMatchesViewController: UICollectionViewDataSource, UICollectionVie
         }
         
         cell.configure(with: match) { [weak self] in
-            // Handle cell tap if needed
-            print("Tapped on match at \(match.venue)")
+
         }
         
         // Update cell colors based on current theme
@@ -564,13 +547,13 @@ extension TeamMatchesViewController: UICollectionViewDataSource, UICollectionVie
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let match = currentMatches[indexPath.item]
-        print("Selected match at \(match.venue)")
         
         // Navigate to TeamMatchInformationViewController
         let matchInfoVC = TeamMatchInformationViewController()
         matchInfoVC.match = match
         matchInfoVC.currentTeam = team
         matchInfoVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
+        matchInfoVC.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(matchInfoVC, animated: true)
     }
 }

@@ -26,8 +26,8 @@ class LoginViewController: UIViewController {
     private let socialButtonsStackView = UIStackView()
     private let googleButton = UIButton(type: .system)
     private let appleButton = UIButton(type: .system)
-    private var appleImageView = UIImageView()  // Add this
-    private let googleImageView = UIImageView() // Add this
+    private var appleImageView = UIImageView()
+    private let googleImageView = UIImageView()
     private let registerLabel = UILabel()
     private let registerButton = UIButton(type: .system)
     
@@ -48,7 +48,6 @@ class LoginViewController: UIViewController {
     
     // MARK: - Setup
     private func setupUI() {
-        // Set initial background color based on current mode
         updateColors()
         
         setupScrollView()
@@ -88,8 +87,7 @@ class LoginViewController: UIViewController {
         emailTextField.keyboardType = .emailAddress
         emailTextField.autocapitalizationType = .none
         emailTextField.autocorrectionType = .no
-        
-        // Set placeholder attributes
+
         updateTextFieldPlaceholders()
         
         let paddingView = UIView(frame: CGRect(x: 0, y: 0, width: 16, height: 50))
@@ -107,8 +105,7 @@ class LoginViewController: UIViewController {
         passwordTextField.layer.borderWidth = 0.7
         passwordTextField.layer.masksToBounds = true
         passwordTextField.isSecureTextEntry = true
-        
-        // Set placeholder attributes
+
         updateTextFieldPlaceholders()
         
         let paddingView = UIView(frame: CGRect(x: 0, y: 0, width: 16, height: 50))

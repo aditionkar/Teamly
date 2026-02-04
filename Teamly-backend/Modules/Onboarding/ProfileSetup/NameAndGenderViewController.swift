@@ -65,8 +65,7 @@ class NameAndGenderViewController: UIViewController {
         
         return view
     }()
-    
-    // Male container with vertical stack
+
     private let maleButton: UIButton = {
         let button = UIButton()
         var config = UIButton.Configuration.plain()
@@ -108,8 +107,7 @@ class NameAndGenderViewController: UIViewController {
 
         return view
     }()
-    
-    // Female container with vertical stack
+
     private let femaleButton: UIButton = {
         let button = UIButton()
         var config = UIButton.Configuration.plain()
@@ -157,7 +155,7 @@ class NameAndGenderViewController: UIViewController {
         var config = UIButton.Configuration.filled()
         
         var title = AttributedString("Next")
-        title.font = .systemFont(ofSize: 20, weight: .semibold) // bigger + bolder
+        title.font = .systemFont(ofSize: 20, weight: .semibold)
         config.attributedTitle = title
         
         config.baseBackgroundColor = .systemGreen
@@ -207,7 +205,6 @@ class NameAndGenderViewController: UIViewController {
     
     // MARK: - Setup
     private func setupUI() {
-        // Set initial background color
         view.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .primaryBlack : .primaryWhite
             
         view.addSubview(topGreenTint)
@@ -236,59 +233,48 @@ class NameAndGenderViewController: UIViewController {
     
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            // Top Green Tint
             topGreenTint.topAnchor.constraint(equalTo: view.topAnchor),
             topGreenTint.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topGreenTint.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             topGreenTint.bottomAnchor.constraint(equalTo: genderStackView.bottomAnchor, constant: 50),
-            
-            // Progress View - Thicker and shorter from sides
+
             progressView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 50),
             progressView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 80),
             progressView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -80),
             progressView.heightAnchor.constraint(equalToConstant: 7),
 
-            
-            // Title Label - More space after separator
             titleLabel.topAnchor.constraint(equalTo: progressView.bottomAnchor, constant: 60),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            
-            // Name Text Field Container
+
             nameTextFieldContainer.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 80),
             nameTextFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             nameTextFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             nameTextFieldContainer.heightAnchor.constraint(equalToConstant: 50),
-            
-            // Name Text Field
+
             nameTextField.topAnchor.constraint(equalTo: nameTextFieldContainer.topAnchor),
             nameTextField.leadingAnchor.constraint(equalTo: nameTextFieldContainer.leadingAnchor),
             nameTextField.trailingAnchor.constraint(equalTo: nameTextFieldContainer.trailingAnchor),
             nameTextField.bottomAnchor.constraint(equalTo: nameTextFieldContainer.bottomAnchor),
-            
-            // Gender Stack View - More space after name field
+
             genderStackView.topAnchor.constraint(equalTo: nameTextFieldContainer.bottomAnchor, constant: 60),
             genderStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             genderStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             genderStackView.heightAnchor.constraint(equalToConstant: 140),
-            
-            // Gender Button Containers - Reduced width
+
             maleButtonContainer.widthAnchor.constraint(equalToConstant: 120),
             femaleButtonContainer.widthAnchor.constraint(equalToConstant: 120),
-            
-            // Male vertical stack inside male container
+
             maleVerticalStack.centerXAnchor.constraint(equalTo: maleButtonContainer.centerXAnchor),
             maleVerticalStack.centerYAnchor.constraint(equalTo: maleButtonContainer.centerYAnchor),
             maleVerticalStack.leadingAnchor.constraint(equalTo: maleButtonContainer.leadingAnchor, constant: 8),
             maleVerticalStack.trailingAnchor.constraint(equalTo: maleButtonContainer.trailingAnchor, constant: -8),
-            
-            // Female vertical stack inside female container
+
             femaleVerticalStack.centerXAnchor.constraint(equalTo: femaleButtonContainer.centerXAnchor),
             femaleVerticalStack.centerYAnchor.constraint(equalTo: femaleButtonContainer.centerYAnchor),
             femaleVerticalStack.leadingAnchor.constraint(equalTo: femaleButtonContainer.leadingAnchor, constant: 8),
             femaleVerticalStack.trailingAnchor.constraint(equalTo: femaleButtonContainer.trailingAnchor, constant: -8),
-            
-            // Next Button
+
             nextButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -30),
             nextButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             nextButton.widthAnchor.constraint(equalToConstant: 120),
@@ -306,38 +292,29 @@ class NameAndGenderViewController: UIViewController {
     // MARK: - Color Updates
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update view background
+
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Update progress view track color
+
         progressView.trackTintColor = isDarkMode ?
             UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0) :
             UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1.0)
-        
-        // Update title label color
+
         titleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update text field placeholder and text color
+
         nameTextField.attributedPlaceholder = NSAttributedString(
             string: "Name",
             attributes: [NSAttributedString.Key.foregroundColor: isDarkMode ? UIColor.gray : UIColor.lightGray]
         )
         nameTextField.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update text field container colors
+
         nameTextFieldContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         nameTextFieldContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight).cgColor
-        
-        //nameTextFieldContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-        
-        // Update gender button containers
+
         maleButtonContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         femaleButtonContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         maleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
         femaleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-        
-        // Update gender labels - using original colors for dark mode, darker for light mode
+
         if isDarkMode {
             maleLabel.textColor = UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0)
             femaleLabel.textColor = UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0)
@@ -345,8 +322,7 @@ class NameAndGenderViewController: UIViewController {
             maleLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
             femaleLabel.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
         }
-        
-        // Update selected gender border if any
+
         updateGenderSelection()
     }
     
@@ -395,8 +371,7 @@ class NameAndGenderViewController: UIViewController {
               let gender = selectedGender else {
             return
         }
-        
-        // Show loading indicator
+
         let loadingIndicator = UIActivityIndicatorView(style: .medium)
         loadingIndicator.center = view.center
         loadingIndicator.startAnimating()
@@ -405,11 +380,9 @@ class NameAndGenderViewController: UIViewController {
         
         Task {
             do {
-                // Get current user ID from Supabase auth
                 let session = try await SupabaseManager.shared.client.auth.session
                 let userId = session.user.id
-                
-                // Save profile data using ProfileManager (upsert version)
+
                 try await ProfileManager.shared.saveNameAndGender(
                     userId: userId,
                     name: name,
@@ -422,13 +395,11 @@ class NameAndGenderViewController: UIViewController {
                     nextButton.isEnabled = true
                     
                     let ageVC = AgeViewController()
-                    
-                    // If we're already in a navigation controller, push
+
                     if let navController = navigationController {
                         navController.pushViewController(ageVC, animated: true)
                         navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
                     } else {
-                        // If not, create a new navigation controller and present modally
                         let navController = UINavigationController(rootViewController: ageVC)
                         navController.modalPresentationStyle = .fullScreen
                         navController.setNavigationBarHidden(true, animated: false)
@@ -461,16 +432,13 @@ class NameAndGenderViewController: UIViewController {
     // MARK: - Helper Methods
     private func updateGenderSelection() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Remove borders from both containers first
+
         maleButtonContainer.layer.borderWidth = isDarkMode ? 0.7 : 0.9
         femaleButtonContainer.layer.borderWidth = isDarkMode ? 0.7 : 0.9
-        
-        // Reset to default border colors
+
         maleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight).cgColor
         femaleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight).cgColor
-        
-        // Add green border to selected container
+
         if selectedGender == "male" {
             maleButtonContainer.layer.borderColor = UIColor.systemGreen.cgColor
         } else if selectedGender == "female" {

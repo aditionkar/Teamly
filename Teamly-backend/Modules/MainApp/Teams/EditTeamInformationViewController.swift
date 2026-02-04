@@ -361,9 +361,7 @@ class EditTeamInformationViewController: UIViewController {
                     .update(updateData)
                     .eq("id", value: teamId.uuidString)
                     .execute()
-                
-                print("✅ Team updated successfully")
-                
+
                 // Create updated team object
                 let updatedTeam = BackendTeam(
                     id: teamId,
@@ -418,9 +416,7 @@ class EditTeamInformationViewController: UIViewController {
     }
     
     @objc private func editIconButtonTapped() {
-        // Handle edit icon action (e.g., show image picker for team logo)
-        print("Edit icon tapped - would show image picker for team logo")
-        
+
         let alert = UIAlertController(
             title: "Change Team Logo",
             message: "Team logo feature coming soon!",
@@ -491,8 +487,20 @@ extension EditTeamInformationViewController {
         editVC.team = team
         editVC.onSave = onSave
         
-        // Configure as full screen modal
-        editVC.modalPresentationStyle = .fullScreen
+        if #available(iOS 15.0, *) {
+                editVC.modalPresentationStyle = .pageSheet
+                if let sheet = editVC.sheetPresentationController {
+                    // Configure sheet appearance
+                    sheet.detents = [.medium(), .large()]
+                    sheet.prefersGrabberVisible = true
+                    sheet.preferredCornerRadius = 20
+                    sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+                    sheet.largestUndimmedDetentIdentifier = .medium
+                }
+            } else {
+                editVC.modalPresentationStyle = .formSheet
+            }
+            
         
         viewController.present(editVC, animated: true)
     }
@@ -531,7 +539,6 @@ struct EditTeamInformationViewControllerRepresentable: UIViewControllerRepresent
         
         // Set up onSave handler for preview
         viewController.onSave = { updatedTeam in
-            print("Team name saved: \(updatedTeam.name ?? "Unknown")")
         }
         
         return viewController

@@ -36,6 +36,12 @@ class ProfileViewController: UIViewController {
         return view
     }()
     
+    private let titleContainer: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    
     private let titleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -43,6 +49,16 @@ class ProfileViewController: UIViewController {
         label.font = .systemFont(ofSize: 35, weight: .bold)
         label.textAlignment = .left
         return label
+    }()
+    
+    private let editButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Edit", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+        button.layer.cornerRadius = 15
+        button.layer.borderWidth = 1
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
     }()
     
     private lazy var avatarButton: UIButton = {
@@ -116,7 +132,7 @@ class ProfileViewController: UIViewController {
         let stackView = UIStackView()
         stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.axis = .vertical
-        stackView.spacing = 16
+        stackView.spacing = 8
         return stackView
     }()
     
@@ -125,6 +141,18 @@ class ProfileViewController: UIViewController {
         indicator.translatesAutoresizingMaskIntoConstraints = false
         indicator.hidesWhenStopped = true
         return indicator
+    }()
+    
+    private let logoutButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Log Out", for: .normal)
+        button.setTitleColor(.systemRed, for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
+        button.backgroundColor = .secondaryDark
+        button.layer.cornerRadius = 25
+        button.clipsToBounds = true
+        return button
     }()
     
     // MARK: - Properties
@@ -140,6 +168,7 @@ class ProfileViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        setupNavigationBar()
         updateColors()
         
         // Start loading data
@@ -182,7 +211,11 @@ class ProfileViewController: UIViewController {
         // Add loading indicator
         view.addSubview(loadingIndicator)
         
-        contentView.addSubview(titleLabel)
+        // Add title container with title and edit button
+        contentView.addSubview(titleContainer)
+        titleContainer.addSubview(titleLabel)
+        titleContainer.addSubview(editButton)
+        
         contentView.addSubview(avatarButton)
         contentView.addSubview(nameLabel)
         contentView.addSubview(ageLabel)
@@ -191,10 +224,71 @@ class ProfileViewController: UIViewController {
         contentView.addSubview(teamsStackView)
         contentView.addSubview(sportsLabel)
         contentView.addSubview(sportsStackView)
+        contentView.addSubview(logoutButton)
         
         setupConstraints()
+        setupButtonActions()
     }
     
+    private func setupNavigationBar() {
+        // Hide navigation bar since we're handling title and edit button in the view
+        navigationController?.setNavigationBarHidden(true, animated: false)
+    }
+    
+    private func setupButtonActions() {
+        editButton.addTarget(self, action: #selector(editButtonTapped), for: .touchUpInside)
+        logoutButton.addTarget(self, action: #selector(logoutButtonTapped), for: .touchUpInside)
+    }
+    
+    // MARK: - Actions
+    @objc private func editButtonTapped() {
+        // TODO: Implement edit profile functionality
+        print("Edit button tapped")
+    }
+    
+    @objc private func logoutButtonTapped() {
+        let alert = UIAlertController(
+            title: "Log Out",
+            message: "Are you sure you want to log out?",
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Log Out", style: .destructive, handler: { _ in
+            self.performLogout()
+        }))
+        
+        present(alert, animated: true)
+    }
+    
+    private func performLogout() {
+        Task {
+            do {
+                try await supabase.auth.signOut()
+                
+                await MainActor.run {
+                    // Get the main window
+                    guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                          let window = windowScene.windows.first else {
+                        self.dismiss(animated: true)
+                        return
+                    }
+                    
+                    // Create LaunchViewController to handle authentication flow
+                    let launchVC = LaunchViewController()
+                    
+                    // Animate the transition
+                    UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
+                        window.rootViewController = launchVC
+                    }, completion: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    showError(message: "Failed to log out. Please try again.")
+                }
+            }
+        }
+    }
     // MARK: - Data Fetching
     private func fetchUserProfileData() async {
         await MainActor.run {
@@ -357,13 +451,13 @@ class ProfileViewController: UIViewController {
     private func getSkillLevelColor(_ level: String) -> UIColor {
         switch level {
         case "Beginner":
-            return UIColor(red: 52/255, green: 152/255, blue: 219/255, alpha: 1.0) // Blue
+            return .systemBlue
         case "Intermediate":
-            return UIColor(red: 46/255, green: 204/255, blue: 113/255, alpha: 1.0) // Green
+            return .systemYellow
         case "Experienced":
-            return UIColor(red: 241/255, green: 196/255, blue: 15/255, alpha: 1.0) // Yellow
+            return .systemOrange
         case "Advanced":
-            return UIColor(red: 231/255, green: 76/255, blue: 60/255, alpha: 1.0) // Red
+            return .systemRed
         default:
             return UIColor.systemGray
         }
@@ -442,17 +536,9 @@ class ProfileViewController: UIViewController {
         let emojiLabel = UILabel()
         emojiLabel.translatesAutoresizingMaskIntoConstraints = false
         emojiLabel.text = emoji
-        emojiLabel.font = .systemFont(ofSize: 28)
+        emojiLabel.font = .systemFont(ofSize: 32)
         emojiLabel.textAlignment = .center
         emojiContainer.addSubview(emojiLabel)
-        
-        // Sport name label
-        let sportNameLabel = UILabel()
-        sportNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        sportNameLabel.text = sportName
-        sportNameLabel.font = .systemFont(ofSize: 16, weight: .medium)
-        sportNameLabel.textColor = traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack
-        //rowView.addSubview(sportNameLabel)
         
         // Level badge
         let levelBadge = UIView()
@@ -494,7 +580,7 @@ class ProfileViewController: UIViewController {
             levelLabel.trailingAnchor.constraint(equalTo: levelBadge.trailingAnchor, constant: -20),
             
             // Row height
-            rowView.heightAnchor.constraint(equalToConstant: 80)
+            rowView.heightAnchor.constraint(equalToConstant: 55)
         ])
         
         return rowView
@@ -509,6 +595,15 @@ class ProfileViewController: UIViewController {
         
         // Update title label color
         titleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
+        
+        // Update edit button color (always green)
+        editButton.backgroundColor = isDarkMode ?
+            UIColor(white: 1, alpha: 0.1) :
+            UIColor(white: 0, alpha: 0.05)
+        editButton.layer.borderColor = isDarkMode ?
+            UIColor(white: 1, alpha: 0.2).cgColor :
+            UIColor(white: 0, alpha: 0.1).cgColor
+        editButton.setTitleColor(isDarkMode ? .systemGreenDark : .systemGreen, for: .normal)
         
         // Update avatar button colors
         avatarButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
@@ -528,6 +623,10 @@ class ProfileViewController: UIViewController {
         
         // Update loading indicator color
         loadingIndicator.color = isDarkMode ? .white : .gray
+        
+        // Update logout button
+        logoutButton.backgroundColor = .secondaryDark
+        logoutButton.setTitleColor(.systemRed, for: .normal)
         
         // Update team cards and sport rows
         updateTeamCardsColors()
@@ -634,12 +733,24 @@ class ProfileViewController: UIViewController {
             contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
             
-            // Title
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            // Title Container
+            titleContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            titleContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            titleContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            titleContainer.heightAnchor.constraint(equalToConstant: 40),
+            
+            // Title Label
+            titleLabel.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+            
+            // Edit Button
+            editButton.trailingAnchor.constraint(equalTo: titleContainer.trailingAnchor, constant: -20),
+            editButton.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+            editButton.heightAnchor.constraint(equalToConstant: 30),
+            editButton.widthAnchor.constraint(equalToConstant: 50),
             
             // Avatar
-            avatarButton.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            avatarButton.topAnchor.constraint(equalTo: titleContainer.bottomAnchor, constant: 16),
             avatarButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             avatarButton.widthAnchor.constraint(equalToConstant: 85),
             avatarButton.heightAnchor.constraint(equalToConstant: 85),
@@ -678,7 +789,13 @@ class ProfileViewController: UIViewController {
             sportsStackView.topAnchor.constraint(equalTo: sportsLabel.bottomAnchor, constant: 16),
             sportsStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             sportsStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            sportsStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -32)
+            
+            // Logout Button
+            logoutButton.topAnchor.constraint(equalTo: sportsStackView.bottomAnchor, constant: 32),
+            logoutButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            logoutButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            logoutButton.heightAnchor.constraint(equalToConstant: 50),
+            logoutButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -32)
         ])
     }
     
@@ -717,14 +834,18 @@ struct ProfileViewController_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             UIViewControllerPreviewWrapper {
-                ProfileViewController()
+                let vc = ProfileViewController()
+                let nav = UINavigationController(rootViewController: vc)
+                return nav
             }
             .edgesIgnoringSafeArea(.all)
             .preferredColorScheme(.dark)
             .previewDisplayName("Dark Mode")
             
             UIViewControllerPreviewWrapper {
-                ProfileViewController()
+                let vc = ProfileViewController()
+                let nav = UINavigationController(rootViewController: vc)
+                return nav
             }
             .edgesIgnoringSafeArea(.all)
             .preferredColorScheme(.light)

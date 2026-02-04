@@ -443,6 +443,8 @@ class PostViewController: UIViewController, UITextFieldDelegate {
 
     private func setupPickers() {
         timePicker.datePickerMode = .time
+        timePicker.minuteInterval = 30  
+        
         if #available(iOS 13.4, *) {
             timePicker.preferredDatePickerStyle = .wheels
         }
@@ -463,6 +465,30 @@ class PostViewController: UIViewController, UITextFieldDelegate {
         if let maxDate = calendar.date(byAdding: .day, value: 30, to: startOfToday) {
             datePicker.maximumDate = maxDate
         }
+    }
+    
+    private func roundToNearest30Minutes(_ date: Date) -> Date {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        
+        guard let hour = components.hour, let minute = components.minute else {
+            return date
+        }
+        
+        // Round minutes to nearest 30
+        let roundedMinute: Int
+        if minute < 15 {
+            roundedMinute = 0
+        } else if minute < 45 {
+            roundedMinute = 30
+        } else {
+            // If minute is 45 or above, round up to next hour with 00 minutes
+            let nextHour = hour + 1
+            let newDate = calendar.date(bySettingHour: nextHour % 24, minute: 0, second: 0, of: date)
+            return newDate ?? date
+        }
+        
+        return calendar.date(bySettingHour: hour, minute: roundedMinute, second: 0, of: date) ?? date
     }
     
     func updateColors() {
@@ -812,13 +838,17 @@ class PostViewController: UIViewController, UITextFieldDelegate {
     @objc private func timeButtonTapped(_ sender: UIButton) {
         activeTimeField = sender
         
+        var initialDate = Date()
+        
         if sender == fromTimeButton, let fromTime = fromTime {
-            timePicker.date = fromTime
+            initialDate = fromTime
         } else if sender == toTimeButton, let toTime = toTime {
-            timePicker.date = toTime
-        } else {
-            timePicker.date = Date()
+            initialDate = toTime
         }
+        
+        // Round the initial date to nearest 30 minutes
+        let roundedInitialDate = roundToNearest30Minutes(initialDate)
+        timePicker.date = roundedInitialDate
         
         let pickerContainer = UIView()
         pickerContainer.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .secondaryDark : .secondaryLight
@@ -919,9 +949,12 @@ class PostViewController: UIViewController, UITextFieldDelegate {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         
+        // Round the selected time to nearest 30 minutes
+        let roundedDate = roundToNearest30Minutes(sender.date)
+        
         if activeTimeField == fromTimeButton {
-            fromTime = sender.date
-            fromTimeButton.setTitle(formatter.string(from: sender.date), for: .normal)
+            fromTime = roundedDate
+            fromTimeButton.setTitle(formatter.string(from: roundedDate), for: .normal)
             fromTimeButton.setTitleColor(traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack, for: .normal)
             
             if let fromTime = fromTime {
@@ -933,8 +966,8 @@ class PostViewController: UIViewController, UITextFieldDelegate {
                 }
             }
         } else if activeTimeField == toTimeButton {
-            toTime = sender.date
-            toTimeButton.setTitle(formatter.string(from: sender.date), for: .normal)
+            toTime = roundedDate
+            toTimeButton.setTitle(formatter.string(from: roundedDate), for: .normal)
             toTimeButton.setTitleColor(traitCollection.userInterfaceStyle == .dark ? .primaryWhite : .primaryBlack, for: .normal)
         }
     }
@@ -965,10 +998,28 @@ class PostViewController: UIViewController, UITextFieldDelegate {
         dismiss(animated: true)
     }
     
+    private func validateTimeRange() -> Bool {
+        guard let fromTime = fromTime, let toTime = toTime else {
+            return true // No validation needed if times aren't set
+        }
+        
+        if fromTime >= toTime {
+            showAlert(title: "Invalid Time", message: "End time must be after start time")
+            return false
+        }
+        
+        return true
+    }
+    
     @objc private func postButtonTapped() {
         updatePlayersNeededFromField()
         
         guard validateForm() else {
+            return
+        }
+        
+        // FIXED: Changed "!" to use the correct validation logic
+        guard validateTimeRange() else {
             return
         }
         
@@ -991,7 +1042,6 @@ class PostViewController: UIViewController, UITextFieldDelegate {
         
         saveMatchToDatabase(matchData: matchData)
     }
-    
     private func validateForm() -> Bool {
         var errorMessages: [String] = []
         
@@ -1033,6 +1083,9 @@ class PostViewController: UIViewController, UITextFieldDelegate {
             return nil
         }
         
+        // Ensure fromTime is rounded
+        let roundedFromTime = roundToNearest30Minutes(fromTime)
+        
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         
@@ -1040,7 +1093,7 @@ class PostViewController: UIViewController, UITextFieldDelegate {
         timeFormatter.dateFormat = "HH:mm:ss"
         
         let formattedDate = dateFormatter.string(from: selectedDate)
-        let formattedTime = timeFormatter.string(from: fromTime)
+        let formattedTime = timeFormatter.string(from: roundedFromTime)
         
         return (formattedDate, formattedTime)
     }

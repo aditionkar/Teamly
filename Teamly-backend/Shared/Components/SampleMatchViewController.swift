@@ -1,8 +1,8 @@
 //
-//  SampleMatch.swift
+//  SampleMatchViewController.swift
 //  Teamly-backend
 //
-//  Created by user@37 on 26/01/26.
+//  Created by user@37 on 05/02/26.
 //
 
 import UIKit
@@ -113,9 +113,7 @@ class SampleMatchViewController: UIViewController {
         
         Task {
             do {
-                print("=== FETCHING MATCHES ===")
-                
-                // Get current user ID first
+
                 await getCurrentUserId()
                 
                 // Fetch matches

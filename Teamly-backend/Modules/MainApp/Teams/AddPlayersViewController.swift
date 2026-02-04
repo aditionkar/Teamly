@@ -230,7 +230,6 @@ class AddPlayersViewController: UIViewController {
         do {
             let session = try await supabase.auth.session
             currentUserId = session.user.id
-            print("Current user ID: \(currentUserId?.uuidString ?? "nil")")
         } catch {
             print("Error fetching current user: \(error)")
         }
@@ -242,9 +241,7 @@ class AddPlayersViewController: UIViewController {
             print("Missing currentUserId or team")
             return
         }
-        
-        print("Loading data for user: \(currentUserId), team: \(team.id)")
-        
+
         do {
             // First try using the RPC function
             let friends: [FriendResponse] = try await supabase
@@ -254,9 +251,7 @@ class AddPlayersViewController: UIViewController {
                 ])
                 .execute()
                 .value
-            
-            print("RPC returned \(friends.count) friends")
-            
+
             let mappedFriends = friends.map { friend in
                 FriendWithProfile(
                     id: friend.id,
@@ -304,7 +299,6 @@ class AddPlayersViewController: UIViewController {
                     .value  // This automatically decodes to [FriendRecord]
                 
                 if friends.isEmpty {
-                    print("No accepted friends found")
                     await MainActor.run {
                         allFriends = []
                         filteredFriends = []
@@ -313,9 +307,7 @@ class AddPlayersViewController: UIViewController {
                     }
                     return
                 }
-                
-                print("Found \(friends.count) accepted friends")
-                
+
                 // Step 2: Get current team members
                 let teamMembers: [TeamMemberRecord] = try await supabase
                     .from("team_members")
@@ -325,9 +317,7 @@ class AddPlayersViewController: UIViewController {
                     .value  // This automatically decodes to [TeamMemberRecord]
                 
                 let teamMemberIds = Set(teamMembers.map { $0.user_id })
-                
-                print("Team has \(teamMemberIds.count) members")
-                
+
                 // Step 3: Get profiles for friends who are not team members
                 var friendsToAdd: [FriendWithProfile] = []
                 
@@ -359,9 +349,7 @@ class AddPlayersViewController: UIViewController {
                         print("Error fetching profile for friend \(friend.friend_id): \(error)")
                     }
                 }
-                
-                print("Manual approach found \(friendsToAdd.count) friends to add")
-                
+
                 allFriends = friendsToAdd
                 filteredFriends = friendsToAdd
                 
@@ -556,8 +544,7 @@ class AddPlayersViewController: UIViewController {
                             .from("team_members")
                             .insert(newMember)
                             .execute()
-                        
-                        print("Added \(friend.displayName) to team \(team.name)")
+
                     }
                     
                     // Show success message
