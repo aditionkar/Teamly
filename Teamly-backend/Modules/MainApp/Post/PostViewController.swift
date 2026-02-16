@@ -386,8 +386,9 @@ class PostViewController: UIViewController, UITextFieldDelegate {
             skillLabel.topAnchor.constraint(equalTo: dateContainer.bottomAnchor, constant: 25),
             skillLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 45),
             skillLabel.widthAnchor.constraint(equalToConstant: 80),
-            
-            skillDropdownContainer.topAnchor.constraint(equalTo: skillLabel.topAnchor),
+            skillLabel.heightAnchor.constraint(equalToConstant: 50),  // Add this
+
+            skillDropdownContainer.topAnchor.constraint(equalTo: skillLabel.topAnchor),  // Keep this
             skillDropdownContainer.leadingAnchor.constraint(equalTo: skillLabel.trailingAnchor, constant: 15),
             skillDropdownContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -45),
             skillDropdownHeightConstraint,
@@ -411,8 +412,9 @@ class PostViewController: UIViewController, UITextFieldDelegate {
             playersLabel.topAnchor.constraint(equalTo: skillDropdownContainer.bottomAnchor, constant: 25),
             playersLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 45),
             playersLabel.widthAnchor.constraint(equalToConstant: 83),
-            
-            playersNeededField.topAnchor.constraint(equalTo: playersLabel.topAnchor),
+            playersLabel.heightAnchor.constraint(equalToConstant: 50),  // Add this
+
+            playersNeededField.topAnchor.constraint(equalTo: playersLabel.topAnchor),  // Keep this
             playersNeededField.leadingAnchor.constraint(equalTo: playersLabel.trailingAnchor, constant: 15),
             playersNeededField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -45),
             playersNeededField.heightAnchor.constraint(equalToConstant: 50),
@@ -443,7 +445,7 @@ class PostViewController: UIViewController, UITextFieldDelegate {
 
     private func setupPickers() {
         timePicker.datePickerMode = .time
-        timePicker.minuteInterval = 30  
+        timePicker.minuteInterval = 30  // Enforce 30-minute intervals
         
         if #available(iOS 13.4, *) {
             timePicker.preferredDatePickerStyle = .wheels

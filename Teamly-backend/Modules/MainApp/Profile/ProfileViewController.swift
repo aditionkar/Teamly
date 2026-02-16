@@ -65,7 +65,7 @@ class ProfileViewController: UIViewController {
         let button = UIButton()
         button.translatesAutoresizingMaskIntoConstraints = false
         
-        // Create and set the SF Symbol image
+        // Set default person.fill image
         let config = UIImage.SymbolConfiguration(pointSize: 45)
         if let image = UIImage(systemName: "person.fill", withConfiguration: config) {
             button.setImage(image, for: .normal)
@@ -75,6 +75,7 @@ class ProfileViewController: UIViewController {
         button.clipsToBounds = true
         button.isUserInteractionEnabled = false
         button.layer.borderWidth = 1.0
+        button.imageView?.contentMode = .scaleAspectFill
         return button
     }()
     
@@ -289,6 +290,7 @@ class ProfileViewController: UIViewController {
             }
         }
     }
+    
     // MARK: - Data Fetching
     private func fetchUserProfileData() async {
         await MainActor.run {
@@ -316,7 +318,10 @@ class ProfileViewController: UIViewController {
                 .execute()
                 .value
             
-            // 3. Fetch user's teams using your existing TeamMember struct
+            // 3. Load profile picture if exists
+            await loadProfilePicture()
+            
+            // 4. Fetch user's teams using your existing TeamMember struct
             let teamMembers: [TeamMember] = try await supabase
                 .from("team_members")
                 .select()
@@ -338,7 +343,7 @@ class ProfileViewController: UIViewController {
             }
             userTeams = teams
             
-            // 4. Fetch user's preferred sports with skill levels
+            // 5. Fetch user's preferred sports with skill levels
             let preferredSports: [UserPreferredSport] = try await supabase
                 .from("user_preferred_sports")
                 .select("sport_id, skill_level")
@@ -367,7 +372,7 @@ class ProfileViewController: UIViewController {
             }
             userSports = sportsWithSkills
             
-            // 5. Update UI with fetched data
+            // 6. Update UI with fetched data
             await MainActor.run {
                 updateUIWithFetchedData()
                 loadingIndicator.stopAnimating()
@@ -379,6 +384,53 @@ class ProfileViewController: UIViewController {
                 loadingIndicator.stopAnimating()
                 showError(message: "Failed to load profile data. Please try again.")
             }
+        }
+    }
+    
+    // MARK: - Profile Picture Loading
+    private func loadProfilePicture() async {
+        guard let profilePicURL = userProfile?.profile_pic,
+              let url = URL(string: profilePicURL) else {
+            print("No profile picture URL found, keeping default person.fill")
+            return
+        }
+        
+        do {
+            print("Loading profile picture from: \(profilePicURL)")
+            
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            // DEBUG: Check what we actually received
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 HTTP Status: \(httpResponse.statusCode)")
+                print("📡 Content-Type: \(httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "nil")")
+            }
+            print("📦 Data size: \(data.count) bytes")
+            
+            // DEBUG: If data is small, it's probably an error JSON not an image
+            if data.count < 1000 {
+                print("⚠️ Suspiciously small data - likely an error response:")
+                print(String(data: data, encoding: .utf8) ?? "unreadable")
+            }
+            
+            guard let image = UIImage(data: data) else {
+                print("❌ Failed to create image from data")
+                return
+            }
+            
+            await MainActor.run {
+                avatarButton.setImage(image, for: .normal)
+                avatarButton.imageView?.contentMode = .scaleAspectFill
+                
+                let isDarkMode = traitCollection.userInterfaceStyle == .dark
+                avatarButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+                avatarButton.layer.borderColor = (isDarkMode ?
+                    UIColor.tertiaryDark.withAlphaComponent(0.5) :
+                    UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
+            }
+            
+        } catch {
+            print("❌ Network error loading profile picture: \(error)")
         }
     }
     
@@ -608,7 +660,10 @@ class ProfileViewController: UIViewController {
         // Update avatar button colors
         avatarButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         avatarButton.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark.withAlphaComponent(0.5) : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-        if let image = avatarButton.image(for: .normal) {
+        
+        // Only tint the image if it's the default person.fill (not a real profile picture)
+        if let image = avatarButton.image(for: .normal),
+           image == UIImage(systemName: "person.fill") {
             let tintColor = isDarkMode ? UIColor.quaternaryLight : .quaternaryDark
             avatarButton.setImage(image.withTintColor(tintColor, renderingMode: .alwaysOriginal), for: .normal)
         }
@@ -674,7 +729,7 @@ class ProfileViewController: UIViewController {
                 // Update emoji container
                 if let emojiContainer = sportRow.subviews.first(where: { $0.layer.cornerRadius == 25 }) {
                     emojiContainer.backgroundColor = isDarkMode ? .black : .white
-                    emojiContainer.layer.borderColor = isDarkMode ? UIColor.black as! CGColor : UIColor.white as! CGColor
+                    emojiContainer.layer.borderColor = isDarkMode ? UIColor.black.cgColor : UIColor.white.cgColor
                 }
                 
                 // Update sport name label

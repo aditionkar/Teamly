@@ -168,70 +168,127 @@ class ProfileManager {
     }
     
     // MARK: - Upload Profile Picture
-        func uploadProfilePicture(userId: UUID, image: UIImage) async throws -> String {
-            do {
-                let userIdString = userId.uuidString
+    func uploadProfilePicture(userId: UUID, image: UIImage) async throws -> String {
+        let userIdString = userId.uuidString.lowercased()
 
-                guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-                    throw NSError(domain: "ProfileManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG data"])
-                }
-
-                let timestamp = Int(Date().timeIntervalSince1970)
-                let fileName = "profile_\(timestamp).jpg"
-                let filePath = "profile_pictures/\(userIdString)/\(fileName)"
-
-                try await supabase.storage
-                    .from("avatars")
-                    .upload(
-                        path: filePath,
-                        file: imageData,
-                        options: FileOptions(
-                            cacheControl: "3600",
-                            contentType: "image/jpeg"
-                        )
-                    )
-
-                let publicURL = try await supabase.storage
-                    .from("avatars")
-                    .getPublicURL(path: filePath)
-                
-                print("✅ Profile picture uploaded successfully: \(publicURL)")
-
-                try await updateProfilePictureURL(userId: userId, url: publicURL.absoluteString)
-                
-                return publicURL.absoluteString
-                
-            } catch {
-                print("❌ Error uploading profile picture: \(error)")
-                throw error
-            }
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            throw NSError(domain: "ProfileManager", code: 1,
+                         userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG data"])
         }
-        
-        private func updateProfilePictureURL(userId: UUID, url: String) async throws {
-            do {
-                let userIdString = userId.uuidString
-                
-                struct ProfilePicUpdate: Encodable {
-                    let profile_pic: String
-                    let updated_at: String
-                }
-                
-                let updateData = ProfilePicUpdate(
-                    profile_pic: url,
-                    updated_at: Date().ISO8601Format()
+
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let fileName = "profile_\(timestamp).jpg"
+        let filePath = "profile_pictures/\(userIdString)/\(fileName)"
+
+        print("📤 Uploading image to storage...")
+
+        try await supabase.storage
+            .from("avatars")
+            .upload(
+                path: filePath,
+                file: imageData,
+                options: FileOptions(
+                    cacheControl: "3600",
+                    contentType: "image/jpeg"
                 )
-                
+            )
+
+        let publicURL = try await supabase.storage
+            .from("avatars")
+            .getPublicURL(path: filePath)
+
+        print("✅ Image uploaded: \(publicURL)")
+
+        // Encodable structs instead of [String: Any]
+        struct ProfileUpdate: Encodable {
+            let profile_pic: String
+            let updated_at: String
+        }
+
+        struct ProfileInsert: Encodable {
+            let id: String
+            let profile_pic: String
+            let created_at: String
+            let updated_at: String
+        }
+
+        // Check if profile exists
+        let profileResponse = try await supabase
+            .from("profiles")
+            .select("id")
+            .eq("id", value: userIdString)
+            .execute()
+
+        let jsonObject = try JSONSerialization.jsonObject(with: profileResponse.data) as? [[String: Any]]
+        let profileExists = jsonObject?.isEmpty == false
+
+        if profileExists {
+            print("📝 Updating existing profile...")
+            let updateData = ProfileUpdate(
+                profile_pic: publicURL.absoluteString,
+                updated_at: Date().ISO8601Format()
+            )
+            try await supabase
+                .from("profiles")
+                .update(updateData)
+                .eq("id", value: userIdString)
+                .execute()
+            print("✅ Profile picture URL updated")
+        } else {
+            print("📝 Creating new profile...")
+            let insertData = ProfileInsert(
+                id: userIdString,
+                profile_pic: publicURL.absoluteString,
+                created_at: Date().ISO8601Format(),
+                updated_at: Date().ISO8601Format()
+            )
+            try await supabase
+                .from("profiles")
+                .insert(insertData)
+                .execute()
+            print("✅ New profile created with picture URL")
+        }
+
+        return publicURL.absoluteString
+    }
+        
+    private func updateProfilePictureURL(userId: UUID, url: String) async throws {
+        do {
+            let userIdString = userId.uuidString.lowercased()
+            
+            // First try to update
+            do {
                 try await supabase
                     .from("profiles")
-                    .update(updateData)
+                    .update([
+                        "profile_pic": url,
+                        "updated_at": Date().ISO8601Format()
+                    ])
                     .eq("id", value: userIdString)
                     .execute()
                 
                 print("✅ Profile picture URL updated in database")
-                
+                return
             } catch {
-                print("❌ Error updating profile picture URL: \(error)")
-                throw error
+                print("⚠️ Update failed, trying insert...")
+                
+                // If update fails, try insert
+                try await supabase
+                    .from("profiles")
+                    .insert([
+                        "id": userIdString,
+                        "profile_pic": url,
+                        "created_at": Date().ISO8601Format(),
+                        "updated_at": Date().ISO8601Format()
+                    ])
+                    .execute()
+                
+                print("✅ New profile created with picture URL")
             }
+            
+        } catch {
+            print("❌ Error updating profile picture URL: \(error)")
+            throw error
         }
+    }
 }

@@ -856,7 +856,7 @@ class NotificationCell: UITableViewCell {
         ])
         
         collapsedConstraints = [
-            containerView.heightAnchor.constraint(equalToConstant: 78)
+            containerView.heightAnchor.constraint(equalToConstant: 80)
         ]
         
         expandedConstraints = [

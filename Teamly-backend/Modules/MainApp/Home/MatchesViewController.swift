@@ -14,8 +14,13 @@ protocol FiltersModalDelegate: AnyObject {
     func didSelectFilters(skillLevels: Set<String>, timeFilters: Set<String>, isFillingFast: Bool)
 }
 
+// MARK: - Delegate Protocol
+protocol MatchUpdateDelegate: AnyObject {
+    func didUpdateMatch(matchId: String, updatedRSVPCount: Int)
+}
+
 // MARK: - Main View Controller
-class MatchesViewController: UIViewController {
+class MatchesViewController: UIViewController, MatchUpdateDelegate {
     
     // MARK: - Properties
     var sportName: String = "Football" // Default value, will be set from HomeViewController
@@ -368,7 +373,6 @@ class MatchesViewController: UIViewController {
         
         let selectedDate = dates[selectedDateIndex]
         do {
-            // Fetch matches from Supabase
             let dbMatches = try await dataService.fetchMatchesForSportAndDate(
                 sportName: sportName,
                 date: selectedDate.dbDate,
@@ -376,14 +380,36 @@ class MatchesViewController: UIViewController {
                 currentUserId: currentUserId
             )
             
-            // Apply all filters
             var filteredDBMatches = dbMatches
+            
+            // ✅ NEW: Filter out past matches when viewing today's matches
+            if selectedDateIndex == 0 {
+                let calendar = Calendar.current
+                let now = Date()
+                
+                filteredDBMatches = filteredDBMatches.filter { match in
+                    // Combine match date + match time into a single DateTime
+                    let dateComponents = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+                    let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+                    
+                    var combinedComponents = DateComponents()
+                    combinedComponents.year = dateComponents.year
+                    combinedComponents.month = dateComponents.month
+                    combinedComponents.day = dateComponents.day
+                    combinedComponents.hour = timeComponents.hour
+                    combinedComponents.minute = timeComponents.minute
+                    combinedComponents.second = timeComponents.second
+                    
+                    let matchDateTime = calendar.date(from: combinedComponents) ?? match.matchDate
+                    return matchDateTime > now
+                }
+            }
             
             // 1. Apply filling fast filter if enabled
             if isFillingFastFilterEnabled {
                 filteredDBMatches = filteredDBMatches.filter { match in
                     let fillRatio = Double(match.playersRSVPed) / Double(match.playersNeeded)
-                    return fillRatio >= 0.66 // Show ONLY matches that are 66%+ filled (red slots)
+                    return fillRatio >= 0.66
                 }
             }
             
@@ -399,13 +425,10 @@ class MatchesViewController: UIViewController {
             if !selectedTimeFilters.isEmpty {
                 filteredDBMatches = filteredDBMatches.filter { match in
                     if selectedTimeFilters.contains("day") && selectedTimeFilters.contains("night") {
-                        // Show both day and night matches
                         return true
                     } else if selectedTimeFilters.contains("day") {
-                        // Show only day matches (6 AM to 5:59 PM)
                         return !match.isNightTime
                     } else if selectedTimeFilters.contains("night") {
-                        // Show only night matches (6 PM to 5:59 AM)
                         return match.isNightTime
                     }
                     return false
@@ -417,7 +440,6 @@ class MatchesViewController: UIViewController {
                 self.matchesCollectionView.reloadData()
                 self.loadingIndicator.stopAnimating()
                 
-                // Show/hide no matches message
                 if self.filteredMatches.isEmpty {
                     self.noMatchesLabel.isHidden = false
                     self.matchesCollectionView.isHidden = true
@@ -476,6 +498,41 @@ class MatchesViewController: UIViewController {
     private func setupFunnelButton() {
         funnelButton.addTarget(self, action: #selector(funnelButtonTapped), for: .touchUpInside)
     }
+    
+    func didUpdateMatch(matchId: String, updatedRSVPCount: Int) {
+            // Find and update the match in filteredMatches array
+            if let index = filteredMatches.firstIndex(where: { $0.id.uuidString == matchId }) {
+                let match = filteredMatches[index]
+                
+                // Create updated match with new RSVP count
+                let updatedMatch = DBMatch(
+                    id: match.id,
+                    matchType: match.matchType,
+                    communityId: match.communityId,
+                    venue: match.venue,
+                    matchDate: match.matchDate,
+                    matchTime: match.matchTime,
+                    sportId: match.sportId,
+                    sportName: match.sportName,
+                    skillLevel: match.skillLevel,
+                    playersNeeded: match.playersNeeded,
+                    postedByUserId: match.postedByUserId,
+                    createdAt: match.createdAt,
+                    playersRSVPed: updatedRSVPCount,
+                    postedByName: match.postedByName,
+                    isFriend: match.isFriend
+                )
+                
+                filteredMatches[index] = updatedMatch
+                
+                // Update the specific cell
+                let indexPath = IndexPath(item: index, section: 0)
+                if let cell = matchesCollectionView.cellForItem(at: indexPath) as? MatchCellCard {
+                    cell.configure(with: updatedMatch, onTap: nil)
+                    cell.updateColors(isDarkMode: traitCollection.userInterfaceStyle == .dark)
+                }
+            }
+        }
     
     // MARK: - New method to update date chips for mode change
     private func updateDateChipsForModeChange() {
@@ -639,6 +696,8 @@ extension MatchesViewController: UICollectionViewDataSource, UICollectionViewDel
         let matchInfoVC = MatchInformationViewController()
         matchInfoVC.match = match
         matchInfoVC.hidesBottomBarWhenPushed = true
+        
+        matchInfoVC.matchUpdateDelegate = self
         
         if let navController = navigationController {
             navController.pushViewController(matchInfoVC, animated: true)

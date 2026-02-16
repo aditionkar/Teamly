@@ -186,7 +186,8 @@ class MatchViewController: UIViewController {
     }
     
     private func processMatches(_ matches: [DBMatch]) {
-        let today = Date()
+        let now = Date()
+        let calendar = Calendar.current
         
         // Clear existing data
         upcomingMatches.removeAll()
@@ -195,9 +196,21 @@ class MatchViewController: UIViewController {
         for match in matches {
             let matchDateTime = combineDateAndTime(date: match.matchDate, time: match.matchTime)
             
-            if matchDateTime > today {
+            // Check if match is today
+            if calendar.isDate(match.matchDate, inSameDayAs: now) {
+                // For today's matches, compare with current time
+                if matchDateTime > now {
+                    // Future time today -> upcoming
+                    upcomingMatches.append(match)
+                } else {
+                    // Past time today -> past
+                    pastMatches.append(match)
+                }
+            } else if matchDateTime > now {
+                // Future dates (tomorrow or later) -> upcoming
                 upcomingMatches.append(match)
             } else {
+                // Past dates -> past
                 pastMatches.append(match)
             }
         }
@@ -213,7 +226,7 @@ class MatchViewController: UIViewController {
         pastMatches.sort { combineDateAndTime(date: $0.matchDate, time: $0.matchTime) >
                            combineDateAndTime(date: $1.matchDate, time: $1.matchTime) }
         
-        // Update current matches
+        // Update current matches based on selected segment
         currentMatches = selectedSegment == 0 ? upcomingMatches : pastMatches
         
         // Update UI

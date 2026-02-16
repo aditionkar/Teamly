@@ -225,18 +225,7 @@ class TeamChatViewController: UIViewController {
         gradientLayer.frame = topGreenTint.bounds
         updateGradientColors()
     }
-    
-//    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-//        super.traitCollectionDidChange(previousTraitCollection)
-//        
-//        // Check for user interface style changes (dark/light mode)
-//        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
-//            updateColors()
-//            updateGradientColors()
-//            tableView.reloadData()
-//        }
-//    }
-    
+
     // MARK: - Setup
     private func setupUI() {
         view.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .primaryBlack : .primaryWhite
@@ -521,7 +510,6 @@ class TeamChatViewController: UIViewController {
         guard let teamId = team?.id else { return }
         
         do {
-            // Format the date for Supabase query
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             let lastPollTimeString = formatter.string(from: lastPollTime)
@@ -531,7 +519,7 @@ class TeamChatViewController: UIViewController {
                 .select()
                 .eq("team_id", value: teamId)
                 .gt("created_at", value: lastPollTimeString)
-                .order("created_at", ascending: true) // Changed to ascending
+                .order("created_at", ascending: true)
                 .execute()
                 .value
             

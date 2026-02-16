@@ -159,8 +159,33 @@ class HomeDataService {
             return []
         }
         
-        // Get all unique user IDs from the matches
-        let userIds = Set(matchRecords.map { $0.posted_by_user_id.uuidString })
+        // Filter out matches whose time has already passed for today
+        let currentDateTime = Date()
+        let filteredMatchRecords = matchRecords.filter { matchRecord in
+            // If match date is tomorrow, always include it
+            if matchRecord.match_date == tomorrow {
+                return true
+            }
+            
+            // If match date is today, check if the time has passed
+            if matchRecord.match_date == today {
+                // Combine match date and time to create a full datetime
+                let matchDateTimeString = "\(matchRecord.match_date) \(matchRecord.match_time)"
+                let fullDateTimeFormatter = DateFormatter()
+                fullDateTimeFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                fullDateTimeFormatter.timeZone = TimeZone.current
+                
+                if let matchDateTime = fullDateTimeFormatter.date(from: matchDateTimeString) {
+                    // Include only if match time is in the future
+                    return matchDateTime > currentDateTime
+                }
+            }
+            
+            return true
+        }
+        
+        // Get all unique user IDs from the filtered matches
+        let userIds = Set(filteredMatchRecords.map { $0.posted_by_user_id.uuidString })
         
         // Fetch user names in batch
         let userNames = await fetchUserNames(for: Array(userIds))
@@ -168,7 +193,7 @@ class HomeDataService {
         // Convert MatchRecord to DBMatch
         var dbMatches: [DBMatch] = []
         
-        for matchRecord in matchRecords {
+        for matchRecord in filteredMatchRecords {
             // Fetch sport name for this match
             let sportName = await fetchSportName(for: matchRecord.sport_id)
             
@@ -195,7 +220,6 @@ class HomeDataService {
         
         return dbMatches
     }
-    
     private func fetchUserNames(for userIds: [String]) async -> [String: String] {
         guard !userIds.isEmpty else { return [:] }
         

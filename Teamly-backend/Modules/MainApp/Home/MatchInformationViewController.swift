@@ -18,6 +18,7 @@ class MatchInformationViewController: UIViewController {
     private var isHostFriend: Bool = false
     private let loadingIndicator = UIActivityIndicatorView(style: .large)
     private let dataService = MatchInformationDataService()
+    weak var matchUpdateDelegate: MatchUpdateDelegate?
     
     // MARK: - UI Components
     private let topGreenTint: UIView = {
@@ -358,7 +359,19 @@ class MatchInformationViewController: UIViewController {
             // 2. Fetch RSVP players with their profiles and friend status
             rsvpPlayers = try await dataService.fetchRSVPPlayers(for: match, currentUserId: currentUserId)
             
-
+            // Sort players so current user appears first
+            rsvpPlayers.sort { player1, player2 in
+                let isPlayer1CurrentUser = player1.userId.uuidString == currentUserId
+                let isPlayer2CurrentUser = player2.userId.uuidString == currentUserId
+                
+                if isPlayer1CurrentUser && !isPlayer2CurrentUser {
+                    return true
+                } else if !isPlayer1CurrentUser && isPlayer2CurrentUser {
+                    return false
+                } else {
+                    return player1.name < player2.name
+                }
+            }
 
             // 3. Check if host is friend
             isHostFriend = await dataService.checkFriendshipWithHost(match: match, currentUserId: currentUserId)
@@ -391,7 +404,7 @@ class MatchInformationViewController: UIViewController {
                 
                 // Re-fetch RSVP players and host profile
                 Task {
-                    await self.loadAllData()
+                    await self.loadAllData() // This will now include sorting
                 }
             }
         } catch {
@@ -486,16 +499,25 @@ class MatchInformationViewController: UIViewController {
         let hasRSVPed = rsvpPlayers.contains { $0.userId.uuidString == currentUserId }
         let isHost = match.postedByUserId.uuidString == currentUserId
         
-        // Check if match date is upcoming or past
-        let currentDate = Date()
-        let matchDate = match.matchDate
-        // To check both date and time, create a combined date-time
-        let matchDateTime = Calendar.current.date(bySettingHour: Calendar.current.component(.hour, from: match.matchTime),
-                                                  minute: Calendar.current.component(.minute, from: match.matchTime),
-                                                  second: 0,
-                                                  of: match.matchDate) ?? match.matchDate
-
+        // FIX: Create a proper datetime by combining date and time
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+        
+        var combinedComponents = DateComponents()
+        combinedComponents.year = dateComponents.year
+        combinedComponents.month = dateComponents.month
+        combinedComponents.day = dateComponents.day
+        combinedComponents.hour = timeComponents.hour
+        combinedComponents.minute = timeComponents.minute
+        combinedComponents.second = timeComponents.second
+        
+        let matchDateTime = calendar.date(from: combinedComponents) ?? match.matchDate
         let isMatchUpcoming = matchDateTime > Date()
+        
+        print("🔍 Match datetime: \(matchDateTime)")
+        print("🔍 Current datetime: \(Date())")
+        print("🔍 Is upcoming: \(isMatchUpcoming)")
         
         if isHost {
             // Host cannot join/leave their own match
@@ -800,9 +822,26 @@ class MatchInformationViewController: UIViewController {
         
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         
+        // Sort players so that current user appears first
+        let sortedPlayers = rsvpPlayers.sorted { player1, player2 in
+            // Check if player1 is current user
+            let isPlayer1CurrentUser = player1.userId.uuidString == currentUserId
+            let isPlayer2CurrentUser = player2.userId.uuidString == currentUserId
+            
+            // Current user always comes first
+            if isPlayer1CurrentUser && !isPlayer2CurrentUser {
+                return true
+            } else if !isPlayer1CurrentUser && isPlayer2CurrentUser {
+                return false
+            } else {
+                // For other players, sort alphabetically by name (optional)
+                return player1.name < player2.name
+            }
+        }
+        
         var previousView: UIView? = nil
         
-        for player in rsvpPlayers {
+        for player in sortedPlayers {
             let playerRow = createPlayerRow(player: player, isDarkMode: isDarkMode)
             playersContainerView.addSubview(playerRow)
             
@@ -1054,22 +1093,31 @@ class MatchInformationViewController: UIViewController {
         let hasRSVPed = rsvpPlayers.contains { $0.userId.uuidString == currentUserId }
         let isHost = match.postedByUserId.uuidString == currentUserId
         
-        // Check if match date is upcoming
-        let currentDate = Date()
-        let matchDate = match.matchDate
-        let isMatchUpcoming = matchDate > currentDate
+        // FIX: Combine date and time exactly like configureFloatingActionButton does
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+        
+        var combinedComponents = DateComponents()
+        combinedComponents.year = dateComponents.year
+        combinedComponents.month = dateComponents.month
+        combinedComponents.day = dateComponents.day
+        combinedComponents.hour = timeComponents.hour
+        combinedComponents.minute = timeComponents.minute
+        combinedComponents.second = timeComponents.second
+        
+        let matchDateTime = calendar.date(from: combinedComponents) ?? match.matchDate
+        let isMatchUpcoming = matchDateTime > Date()
         
         if isHost || !isMatchUpcoming {
             return
         }
         
         if hasRSVPed {
-            // Leave match
             Task {
                 await leaveMatch(matchId: match.id.uuidString)
             }
         } else {
-            // Join match
             Task {
                 await joinMatch(matchId: match.id.uuidString)
             }
@@ -1078,29 +1126,84 @@ class MatchInformationViewController: UIViewController {
     
     private func joinMatch(matchId: String) async {
         do {
-            try await dataService.joinMatch(matchId: matchId, userId: currentUserId)
+            print("🔄 Attempting to join match with ID: \(matchId)")
+            print("🔄 Current user ID: \(currentUserId)")
             
-            // Update the count
-            await updateMatchPlayersCount()
-            
-            // Reload all data
-            await MainActor.run {
-                self.loadingIndicator.startAnimating()
+            if let match = match {
+                // FIX: Combine date + time properly
+                let calendar = Calendar.current
+                let dateComponents = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+                let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+                
+                var combinedComponents = DateComponents()
+                combinedComponents.year = dateComponents.year
+                combinedComponents.month = dateComponents.month
+                combinedComponents.day = dateComponents.day
+                combinedComponents.hour = timeComponents.hour
+                combinedComponents.minute = timeComponents.minute
+                combinedComponents.second = timeComponents.second
+                
+                let matchDateTime = calendar.date(from: combinedComponents) ?? match.matchDate
+                let isUpcoming = matchDateTime > Date()
+                print("🔍 Match is upcoming: \(isUpcoming)")
+                
+                if !isUpcoming {
+                    await MainActor.run {
+                        self.showError("Cannot join a match that has already started")
+                    }
+                    return
+                }
             }
             
+            // rest of your joinMatch code unchanged...
+            try await dataService.joinMatch(matchId: matchId, userId: currentUserId)
+            // Get updated count
+                    let updatedCount = try await dataService.fetchPlayersRSVPCount(matchId: matchId)
+                    
+                    // Notify delegate BEFORE reloading data
+                    await MainActor.run {
+                        self.matchUpdateDelegate?.didUpdateMatch(matchId: matchId, updatedRSVPCount: updatedCount)
+                    }
+            await updateMatchPlayersCount()
+            await MainActor.run { self.loadingIndicator.startAnimating() }
             await loadAllData()
+            await MainActor.run { self.showSuccess("Successfully joined the match!") }
             
         } catch {
-            print("❌ ERROR joining match: \(error)")
+            print("❌ ERROR joining match: \(error.localizedDescription)")
             await MainActor.run {
-                self.showError("Failed to join match")
+                self.showError("Failed to join match: \(error.localizedDescription)")
             }
         }
     }
 
     private func leaveMatch(matchId: String) async {
         do {
+            print("🔄 Attempting to leave match with ID: \(matchId)")
+            print("🔄 Current user ID: \(currentUserId)")
+            
+            // First, check if the user has actually joined this match
+            let hasJoined = rsvpPlayers.contains { $0.userId.uuidString == currentUserId }
+            print("🔍 User has joined: \(hasJoined)")
+            
+            if !hasJoined {
+                await MainActor.run {
+                    self.showError("You haven't joined this match")
+                }
+                return
+            }
+            
             try await dataService.leaveMatch(matchId: matchId, userId: currentUserId)
+            
+            print("✅ Successfully left match, updating UI...")
+            
+            // Get updated count (after leaving)
+                    let updatedCount = try await dataService.fetchPlayersRSVPCount(matchId: matchId)
+                    
+                    // Notify delegate BEFORE reloading data
+                    await MainActor.run {
+                        self.matchUpdateDelegate?.didUpdateMatch(matchId: matchId, updatedRSVPCount: updatedCount)
+                    }
             
             // Update the count
             await updateMatchPlayersCount()
@@ -1112,13 +1215,25 @@ class MatchInformationViewController: UIViewController {
             
             await loadAllData()
             
-        } catch {
-            print("❌ ERROR leaving match: \(error)")
             await MainActor.run {
-                self.showError("Failed to leave match")
+                self.showSuccess("Successfully left the match!")
+            }
+            
+        } catch {
+            print("❌ ERROR leaving match: \(error.localizedDescription)")
+            await MainActor.run {
+                self.showError("Failed to leave match: \(error.localizedDescription)")
             }
         }
     }
+
+    // Add helper methods for showing success/error messages
+    private func showSuccess(_ message: String) {
+        let alert = UIAlertController(title: "Success", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
     
     private func updateMatchPlayersCount() async {
         guard let match = match else { return }

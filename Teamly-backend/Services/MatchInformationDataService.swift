@@ -162,37 +162,116 @@ class MatchInformationDataService {
     
     // Join a match
     func joinMatch(matchId: String, userId: String) async throws {
-        let rsvp = [
-            "match_id": matchId,
-            "user_id": userId,
-            "rsvp_status": "going"
-        ]
-        
-        _ = try await supabase
+        // First, check if user already has an RSVP for this match
+        let existingRSVP = try await supabase
             .from("match_rsvps")
-            .insert(rsvp)
-            .execute()
-    }
-    
-    // Leave a match
-    func leaveMatch(matchId: String, userId: String) async throws {
-        _ = try await supabase
-            .from("match_rsvps")
-            .delete()
+            .select("*")
             .eq("match_id", value: matchId)
             .eq("user_id", value: userId)
             .execute()
+        
+        let decoder = JSONDecoder()
+        let existingEntries = try decoder.decode([MatchRSVP].self, from: existingRSVP.data)
+        
+        // Define Encodable structs for insert/update payloads
+        struct RSVPInsert: Encodable {
+            let match_id: String
+            let user_id: String
+            let rsvp_status: String
+            let rsvp_at: String
+        }
+        
+        struct RSVPUpdate: Encodable {
+            let rsvp_status: String
+            let rsvp_at: String
+        }
+        
+        if existingEntries.isEmpty {
+            // No existing RSVP, insert new one
+            let rsvp = RSVPInsert(
+                match_id: matchId,
+                user_id: userId,
+                rsvp_status: "going",
+                rsvp_at: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            try await supabase
+                .from("match_rsvps")
+                .insert(rsvp)
+                .execute()
+            
+            print("✅ Successfully joined match: \(matchId)")
+        } else {
+            // Update existing RSVP to "going"
+            let updateData = RSVPUpdate(
+                rsvp_status: "going",
+                rsvp_at: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            try await supabase
+                .from("match_rsvps")
+                .update(updateData)
+                .eq("match_id", value: matchId)
+                .eq("user_id", value: userId)
+                .execute()
+            
+            print("✅ Successfully updated RSVP to join match: \(matchId)")
+        }
     }
-    
-    func fetchPlayersRSVPCount(matchId: String) async throws -> Int {
-        let response = try await supabase
+
+    // Leave a match
+    func leaveMatch(matchId: String, userId: String) async throws {
+        // Check if the RSVP exists
+        let existingRSVP = try await supabase
             .from("match_rsvps")
-            .select("*", count: .exact)
+            .select("*")
             .eq("match_id", value: matchId)
-            .eq("rsvp_status", value: "going")
+            .eq("user_id", value: userId)
             .execute()
         
-        return response.count ?? 0
+        let decoder = JSONDecoder()
+        let existingEntries = try decoder.decode([MatchRSVP].self, from: existingRSVP.data)
+        
+        if !existingEntries.isEmpty {
+            // Option 1: Delete the RSVP entirely
+            let response = try await supabase
+                .from("match_rsvps")
+                .delete()
+                .eq("match_id", value: matchId)
+                .eq("user_id", value: userId)
+                .execute()
+            
+            print("✅ Successfully left match: \(matchId)")
+            
+            // Option 2: Alternatively, you could update status to "not_going" instead of deleting
+            // let updateData = ["rsvp_status": "not_going"]
+            // let response = try await supabase
+            //     .from("match_rsvps")
+            //     .update(updateData)
+            //     .eq("match_id", value: matchId)
+            //     .eq("user_id", value: userId)
+            //     .execute()
+        } else {
+            print("⚠️ No RSVP found for match: \(matchId) and user: \(userId)")
+            throw NSError(domain: "MatchInformationDataService", code: 404, userInfo: [NSLocalizedDescriptionKey: "No RSVP found for this match"])
+        }
+    }
+
+    // Fetch RSVP count with better error handling
+    func fetchPlayersRSVPCount(matchId: String) async throws -> Int {
+        do {
+            let response = try await supabase
+                .from("match_rsvps")
+                .select("*", count: .exact)
+                .eq("match_id", value: matchId)
+                .eq("rsvp_status", value: "going")
+                .execute()
+            
+            return response.count ?? 0
+        } catch {
+            print("❌ Error fetching RSVP count: \(error)")
+            throw error
+        }
     }
     
     // Send friend request

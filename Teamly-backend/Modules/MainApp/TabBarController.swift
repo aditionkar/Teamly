@@ -26,7 +26,7 @@ class TabBarController: UITabBarController, UITabBarControllerDelegate {
     // MARK: - Setup
     private func setupTabs() {
         let homeVC = createNavController(
-            title: "Home",
+            title: "Discover",
             image: UIImage(systemName: "house"),
             selectedImage: UIImage(systemName: "house.fill"),
             viewController: HomeViewController()

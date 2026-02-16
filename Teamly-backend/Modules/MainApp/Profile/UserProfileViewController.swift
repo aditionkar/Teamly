@@ -21,7 +21,8 @@ class UserProfileViewController: UIViewController {
     private var currentUserId: String = ""
     private var currentUserName: String = ""
     private var isFriend: Bool = false
-    private var hasPendingRequest: Bool = false
+    private var hasOutgoingRequest: Bool = false  // Request sent by current user
+    private var hasIncomingRequest: Bool = false  // Request received from this user
     
     // MARK: - UI Components
     private let topGreenTint: UIView = {
@@ -67,29 +68,42 @@ class UserProfileViewController: UIViewController {
         return label
     }()
     
+    // MARK: - Updated Avatar View (similar to ProfileViewController)
     private lazy var avatarView: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
         
+        // Create UIImageView for the avatar
         let imageView = UIImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        
+        // Set default person.fill image
         let config = UIImage.SymbolConfiguration(pointSize: 45)
         imageView.image = UIImage(systemName: "person.fill", withConfiguration: config)
-        imageView.contentMode = .scaleAspectFit
+        
         view.addSubview(imageView)
         
         NSLayoutConstraint.activate([
-            imageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            imageView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            imageView.widthAnchor.constraint(equalToConstant: 45),
-            imageView.heightAnchor.constraint(equalToConstant: 45)
+            imageView.topAnchor.constraint(equalTo: view.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         
         view.layer.cornerRadius = 43
         view.clipsToBounds = true
         view.layer.borderWidth = 1.0
+        
+        // Store reference to imageView for later updates
+        self.avatarImageView = imageView
+        
         return view
     }()
+    
+    // Reference to the image view inside avatarView
+    private var avatarImageView: UIImageView!
     
     private let nameLabel: UILabel = {
         let label = UILabel()
@@ -257,7 +271,7 @@ class UserProfileViewController: UIViewController {
         }
     }
     
-    // Setup action button based on relationship status
+    // MARK: - Setup Action Button
     private func setupActionButton() {
         // Check if this is the current user's own profile
         if let userId = userId, userId.uuidString == currentUserId {
@@ -268,27 +282,55 @@ class UserProfileViewController: UIViewController {
         
         actionButton.isHidden = false
         
+        // Reset any previous width constraint
+        for constraint in actionButton.constraints {
+            if constraint.firstAttribute == .width {
+                constraint.isActive = false
+            }
+        }
+        
         if isFriend {
             // User is already a friend - show Friend label (non-interactive)
             actionButton.setTitle("Friend", for: .normal)
             actionButton.isUserInteractionEnabled = false
             print("✅ Showing 'Friend' button for user")
-        } else if hasPendingRequest {
-            // There's a pending request - show Request Sent (non-interactive)
+            
+            // Set default width for Friend button
+            actionButton.widthAnchor.constraint(equalToConstant: 150).isActive = true
+            
+        } else if hasIncomingRequest {
+            // User sent you a request - show appropriate message (non-interactive)
+            actionButton.setTitle("Sent you a request", for: .normal)
+            actionButton.isUserInteractionEnabled = false
+            print("✅ Showing 'Sent you a request' button for user")
+            
+            // Make button wider for the longer text
+            actionButton.widthAnchor.constraint(equalToConstant: 180).isActive = true
+            
+        } else if hasOutgoingRequest {
+            // You sent a request to this user - show Request Sent (non-interactive)
             actionButton.setTitle("Request Sent", for: .normal)
             actionButton.isUserInteractionEnabled = false
             print("✅ Showing 'Request Sent' button for user")
+            
+            // Set default width for Request Sent button
+            actionButton.widthAnchor.constraint(equalToConstant: 150).isActive = true
+            
         } else {
             // User is not a friend - show Send Request button
             actionButton.setTitle("Send Request", for: .normal)
             actionButton.addTarget(self, action: #selector(sendRequestButtonTapped), for: .touchUpInside)
             actionButton.isUserInteractionEnabled = true
             print("✅ Showing 'Send Request' button for user")
+            
+            // Set default width for Send Request button
+            actionButton.widthAnchor.constraint(equalToConstant: 150).isActive = true
         }
         
         updateActionButtonAppearance()
     }
     
+    // MARK: - Update Action Button Appearance
     private func updateActionButtonAppearance() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         
@@ -297,7 +339,11 @@ class UserProfileViewController: UIViewController {
             actionButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
             actionButton.setTitleColor(.systemGreen, for: .normal)
             print("✅ Friend button: Dark mode: \(isDarkMode), BG: \(isDarkMode ? "secondaryDark" : "secondaryLight"), Text: systemGreen")
-        } else if hasPendingRequest {
+        } else if hasIncomingRequest {
+            // Sent you a request button appearance
+            actionButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+            actionButton.setTitleColor(.systemGray, for: .normal)
+        } else if hasOutgoingRequest {
             // Request Sent button appearance
             actionButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
             actionButton.setTitleColor(.systemGray, for: .normal)
@@ -386,7 +432,7 @@ class UserProfileViewController: UIViewController {
             print("✅ Notification created for receiver")
             
             // 4. Update UI
-            hasPendingRequest = true
+            hasOutgoingRequest = true
             await MainActor.run {
                 setupActionButton()
                 showSuccessAlert(message: "Friend request sent successfully!")
@@ -408,6 +454,48 @@ class UserProfileViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+    
+    // MARK: - Profile Picture Loading
+    private func loadProfilePicture() async {
+        guard let profilePicURL = userProfile?.profile_pic,
+              let url = URL(string: profilePicURL) else {
+            print("No profile picture URL found, keeping default person.fill")
+            return
+        }
+        
+        do {
+            print("Loading profile picture from: \(profilePicURL)")
+            
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            // Debug info
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 HTTP Status: \(httpResponse.statusCode)")
+            }
+            
+            guard let image = UIImage(data: data) else {
+                print("❌ Failed to create image from data")
+                return
+            }
+            
+            await MainActor.run {
+                // Update the image view with the downloaded image
+                avatarImageView.image = image
+                avatarImageView.contentMode = .scaleAspectFill
+                avatarImageView.tintColor = .clear
+                
+                // Update border colors
+                let isDarkMode = traitCollection.userInterfaceStyle == .dark
+                avatarView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+                avatarView.layer.borderColor = (isDarkMode ?
+                    UIColor.tertiaryDark.withAlphaComponent(0.5) :
+                    UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
+            }
+            
+        } catch {
+            print("❌ Error loading profile picture: \(error)")
+        }
     }
     
     // MARK: - Data Fetching
@@ -433,10 +521,13 @@ class UserProfileViewController: UIViewController {
                 .execute()
                 .value
             
-            // 2. Check friendship status and pending requests
+            // 2. Load profile picture if exists
+            await loadProfilePicture()
+            
+            // 3. Check friendship status and pending requests
             await checkRelationshipStatus()
             
-            // 3. Fetch user's teams
+            // 4. Fetch user's teams
             let teamMembers: [TeamMember] = try await supabase
                 .from("team_members")
                 .select()
@@ -457,7 +548,7 @@ class UserProfileViewController: UIViewController {
             }
             userTeams = teams
             
-            // 4. Fetch user's preferred sports with skill levels
+            // 5. Fetch user's preferred sports with skill levels
             let preferredSports: [UserPreferredSport] = try await supabase
                 .from("user_preferred_sports")
                 .select("sport_id, skill_level")
@@ -485,7 +576,7 @@ class UserProfileViewController: UIViewController {
             }
             userSports = sportsWithSkills
             
-            // 5. Update UI with fetched data
+            // 6. Update UI with fetched data
             await MainActor.run {
                 updateUIWithFetchedData()
                 loadingIndicator.stopAnimating()
@@ -500,7 +591,7 @@ class UserProfileViewController: UIViewController {
         }
     }
     
-    // Check relationship status (friend or pending request)
+    // MARK: - Check Relationship Status
     private func checkRelationshipStatus() async {
         guard let userId = userId else { return }
         guard !currentUserId.isEmpty else { return }
@@ -508,7 +599,8 @@ class UserProfileViewController: UIViewController {
         // Don't check if it's the current user
         if userId.uuidString == currentUserId {
             isFriend = false
-            hasPendingRequest = false
+            hasOutgoingRequest = false
+            hasIncomingRequest = false
             await MainActor.run {
                 setupActionButton()
             }
@@ -516,7 +608,7 @@ class UserProfileViewController: UIViewController {
         }
         
         do {
-            // Check for accepted friendship in either direction
+            // 1. Check for accepted friendship in either direction
             let acceptedResponse = try await supabase
                 .from("friends")
                 .select("*")
@@ -526,8 +618,8 @@ class UserProfileViewController: UIViewController {
             let acceptedFriendships = try JSONDecoder().decode([[String: AnyCodable]].self, from: acceptedResponse.data)
             isFriend = !acceptedFriendships.isEmpty
             
-            // Check for pending requests from current user to this user
-            let pendingResponse = try await supabase
+            // 2. Check for outgoing pending request (current user sent request to this user)
+            let outgoingResponse = try await supabase
                 .from("friends")
                 .select("*")
                 .eq("user_id", value: currentUserId)
@@ -535,10 +627,22 @@ class UserProfileViewController: UIViewController {
                 .eq("status", value: "pending")
                 .execute()
             
-            let pendingRequests = try JSONDecoder().decode([[String: AnyCodable]].self, from: pendingResponse.data)
-            hasPendingRequest = !pendingRequests.isEmpty
+            let outgoingRequests = try JSONDecoder().decode([[String: AnyCodable]].self, from: outgoingResponse.data)
+            hasOutgoingRequest = !outgoingRequests.isEmpty
             
-            print("✅ Relationship status - Is friend: \(isFriend), Has pending request: \(hasPendingRequest)")
+            // 3. Check for incoming pending request (this user sent request to current user)
+            let incomingResponse = try await supabase
+                .from("friends")
+                .select("*")
+                .eq("user_id", value: userId.uuidString)
+                .eq("friend_id", value: currentUserId)
+                .eq("status", value: "pending")
+                .execute()
+            
+            let incomingRequests = try JSONDecoder().decode([[String: AnyCodable]].self, from: incomingResponse.data)
+            hasIncomingRequest = !incomingRequests.isEmpty
+            
+            print("✅ Relationship status - Is friend: \(isFriend), Outgoing: \(hasOutgoingRequest), Incoming: \(hasIncomingRequest)")
             
             // Update button on main thread
             await MainActor.run {
@@ -548,12 +652,14 @@ class UserProfileViewController: UIViewController {
         } catch {
             print("❌ ERROR checking relationship status: \(error)")
             isFriend = false
-            hasPendingRequest = false
+            hasOutgoingRequest = false
+            hasIncomingRequest = false
             await MainActor.run {
                 setupActionButton()
             }
         }
     }
+
     
     private func updateUIWithFetchedData() {
         // Update profile information
@@ -763,8 +869,11 @@ class UserProfileViewController: UIViewController {
         // Update avatar view
         avatarView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         avatarView.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark.withAlphaComponent(0.5) : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-        if let imageView = avatarView.subviews.first as? UIImageView {
-            imageView.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
+        
+        // Only tint the image if it's the default person.fill (not a real profile picture)
+        if let image = avatarImageView.image,
+           image == UIImage(systemName: "person.fill") {
+            avatarImageView.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
         }
         
         // Update labels
