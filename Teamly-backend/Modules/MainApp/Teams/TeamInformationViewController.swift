@@ -384,6 +384,21 @@ class TeamInformationViewController: UIViewController {
         editTeamInfoButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
     }
     
+    // UPDATED METHOD: Sort members with current user at the top
+        private func sortMembersWithCurrentUserAtTop(_ members: [TeamMemberWithProfile]) -> [TeamMemberWithProfile] {
+            // Split into current user and others
+            let currentUserMembers = members.filter { $0.isCurrentUser }
+            let otherMembers = members.filter { !$0.isCurrentUser }
+            
+            // Sort other members alphabetically by name (optional)
+            let sortedOtherMembers = otherMembers.sorted {
+                ($0.profile.name ?? "") < ($1.profile.name ?? "")
+            }
+            
+            // Combine: current user(s) first, then sorted others
+            return currentUserMembers + sortedOtherMembers
+        }
+    
     // MARK: - Data Fetching
     private func fetchCurrentUserId() async {
         do {
@@ -457,48 +472,67 @@ class TeamInformationViewController: UIViewController {
     
     // MARK: - UI Updates
     private func updateUIWithTeamData() {
-        guard let team = team else { return }
-        
-        teamNameLabel.text = team.name
-        teamInfoLabel.text = "Team"
-        playerCountLabel.text = "\(teamMembers.count) players"
-        
-        editTeamInfoButton.isHidden = !isCurrentUserCaptain
-        
-        // Update actions container height
-        if let heightConstraint = actionsContainerView.constraints.first(where: { $0.firstAttribute == .height }) {
-            actionsContainerView.removeConstraint(heightConstraint)
-        }
-        
-        let newHeight: CGFloat = isCurrentUserCaptain ? 108 : 60
-        actionsContainerView.heightAnchor.constraint(equalToConstant: newHeight).isActive = true
-        
-        // Setup sections
-        if isCurrentUserCaptain {
-            // Captain view: Show "You" in Captain section
-            setupCaptainSectionForCurrentUser()
+            guard let team = team else { return }
             
-            // Show other members in Players section
-            let otherMembers = teamMembers.filter { !$0.isCurrentUser }
-            setupPlayersSection(members: otherMembers, showDeleteButton: true)
-        } else {
-            // Member view: Show captain in Captain section
-            if let captain = teamMembers.first(where: { $0.isCaptain }) {
-                setupCaptainSection(member: captain)
+            teamNameLabel.text = team.name
+            teamInfoLabel.text = "Team"
+            playerCountLabel.text = "\(teamMembers.count) players"
+            
+            editTeamInfoButton.isHidden = !isCurrentUserCaptain
+            
+            // Update actions container height
+            if let heightConstraint = actionsContainerView.constraints.first(where: { $0.firstAttribute == .height }) {
+                actionsContainerView.removeConstraint(heightConstraint)
             }
             
-            // Show current user and other members in Players section
-            setupPlayersSectionForRegularMember()
+            let newHeight: CGFloat = isCurrentUserCaptain ? 108 : 60
+            actionsContainerView.heightAnchor.constraint(equalToConstant: newHeight).isActive = true
+            
+            // Setup sections
+            if isCurrentUserCaptain {
+                // Captain view: Show "You" in Captain section
+                setupCaptainSectionForCurrentUser()
+                
+                // Show other members in Players section (current user is already in captain section)
+                let otherMembers = teamMembers.filter { !$0.isCurrentUser }
+                // Sort other members alphabetically
+                let sortedOtherMembers = otherMembers.sorted {
+                    ($0.profile.name ?? "") < ($1.profile.name ?? "")
+                }
+                setupPlayersSection(members: sortedOtherMembers, showDeleteButton: true)
+            } else {
+                // Member view: Show captain in Captain section
+                if let captain = teamMembers.first(where: { $0.isCaptain }) {
+                    setupCaptainSection(member: captain)
+                }
+                
+                // Show current user at the top, then other members in Players section
+                setupPlayersSectionForRegularMember()
+            }
+            
+            updateColors()
         }
-        
-        updateColors()
-    }
     
     private func setupCaptainSectionForCurrentUser() {
-        captainContainerView.subviews.forEach { $0.removeFromSuperview() }
-        
-        if let currentUserMember = teamMembers.first(where: { $0.isCurrentUser }) {
-            let playerView = createPlayerView(member: currentUserMember, showLeaveButton: false, showDeleteButton: false)
+            captainContainerView.subviews.forEach { $0.removeFromSuperview() }
+            
+            if let currentUserMember = teamMembers.first(where: { $0.isCurrentUser }) {
+                let playerView = createPlayerView(member: currentUserMember, showLeaveButton: false, showDeleteButton: false)
+                captainContainerView.addSubview(playerView)
+                
+                NSLayoutConstraint.activate([
+                    playerView.topAnchor.constraint(equalTo: captainContainerView.topAnchor),
+                    playerView.leadingAnchor.constraint(equalTo: captainContainerView.leadingAnchor),
+                    playerView.trailingAnchor.constraint(equalTo: captainContainerView.trailingAnchor),
+                    playerView.bottomAnchor.constraint(equalTo: captainContainerView.bottomAnchor)
+                ])
+            }
+        }
+    
+    private func setupCaptainSection(member: TeamMemberWithProfile) {
+            captainContainerView.subviews.forEach { $0.removeFromSuperview() }
+            
+            let playerView = createPlayerView(member: member, showLeaveButton: false, showDeleteButton: false)
             captainContainerView.addSubview(playerView)
             
             NSLayoutConstraint.activate([
@@ -508,51 +542,56 @@ class TeamInformationViewController: UIViewController {
                 playerView.bottomAnchor.constraint(equalTo: captainContainerView.bottomAnchor)
             ])
         }
-    }
-    
-    private func setupCaptainSection(member: TeamMemberWithProfile) {
-        captainContainerView.subviews.forEach { $0.removeFromSuperview() }
         
-        let playerView = createPlayerView(member: member, showLeaveButton: false, showDeleteButton: false)
-        captainContainerView.addSubview(playerView)
-        
-        NSLayoutConstraint.activate([
-            playerView.topAnchor.constraint(equalTo: captainContainerView.topAnchor),
-            playerView.leadingAnchor.constraint(equalTo: captainContainerView.leadingAnchor),
-            playerView.trailingAnchor.constraint(equalTo: captainContainerView.trailingAnchor),
-            playerView.bottomAnchor.constraint(equalTo: captainContainerView.bottomAnchor)
-        ])
-    }
-    
-    private func setupPlayersSection(members: [TeamMemberWithProfile], showDeleteButton: Bool) {
-        playersStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        for member in members {
-            let playerView = createPlayerView(member: member, showLeaveButton: false, showDeleteButton: showDeleteButton)
-            playersStackView.addArrangedSubview(playerView)
+        private func setupPlayersSection(members: [TeamMemberWithProfile], showDeleteButton: Bool) {
+            playersStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
             
-            NSLayoutConstraint.activate([
-                playerView.heightAnchor.constraint(equalToConstant: 70)
-            ])
+            for member in members {
+                let playerView = createPlayerView(member: member, showLeaveButton: false, showDeleteButton: showDeleteButton)
+                playersStackView.addArrangedSubview(playerView)
+                
+                NSLayoutConstraint.activate([
+                    playerView.heightAnchor.constraint(equalToConstant: 70)
+                ])
+            }
         }
-    }
+    
     
     private func setupPlayersSectionForRegularMember() {
-        playersStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        // Filter out captain and show rest
-        let nonCaptainMembers = teamMembers.filter { !$0.isCaptain }
-        
-        for member in nonCaptainMembers {
-            let showLeaveButton = member.isCurrentUser
-            let playerView = createPlayerView(member: member, showLeaveButton: showLeaveButton, showDeleteButton: false)
-            playersStackView.addArrangedSubview(playerView)
+            playersStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
             
-            NSLayoutConstraint.activate([
-                playerView.heightAnchor.constraint(equalToConstant: 70)
-            ])
+            // Filter out captain
+            let nonCaptainMembers = teamMembers.filter { !$0.isCaptain }
+            
+            // Split into current user and others
+            let currentUserMember = nonCaptainMembers.first(where: { $0.isCurrentUser })
+            let otherMembers = nonCaptainMembers.filter { !$0.isCurrentUser }
+            
+            // Sort other members alphabetically
+            let sortedOtherMembers = otherMembers.sorted {
+                ($0.profile.name ?? "") < ($1.profile.name ?? "")
+            }
+            
+            // Add current user first if exists
+            if let currentUser = currentUserMember {
+                let playerView = createPlayerView(member: currentUser, showLeaveButton: true, showDeleteButton: false)
+                playersStackView.addArrangedSubview(playerView)
+                
+                NSLayoutConstraint.activate([
+                    playerView.heightAnchor.constraint(equalToConstant: 70)
+                ])
+            }
+            
+            // Add other members
+            for member in sortedOtherMembers {
+                let playerView = createPlayerView(member: member, showLeaveButton: false, showDeleteButton: false)
+                playersStackView.addArrangedSubview(playerView)
+                
+                NSLayoutConstraint.activate([
+                    playerView.heightAnchor.constraint(equalToConstant: 70)
+                ])
+            }
         }
-    }
     
     private func createPlayerView(member: TeamMemberWithProfile, showLeaveButton: Bool, showDeleteButton: Bool) -> UIView {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark

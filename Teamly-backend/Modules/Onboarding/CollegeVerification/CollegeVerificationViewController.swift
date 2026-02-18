@@ -7,6 +7,9 @@
 
 import UIKit
 
+import Supabase
+
+
 class CollegeVerificationViewController: UIViewController {
     
     // MARK: - Properties
@@ -193,6 +196,10 @@ class CollegeVerificationViewController: UIViewController {
             emailTextField.text = text.lowercased() // Auto lowercase
         }
     }
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+
     
     // MARK: - Color Updates
     private func updateColors() {
@@ -244,37 +251,112 @@ class CollegeVerificationViewController: UIViewController {
             showAlert(message: "Please enter your college email address")
             return
         }
-        
+
         // Validate email format
-        if !isValidEmail(email) {
+        guard isValidEmail(email) else {
             showAlert(message: "Please enter a valid email address")
             return
         }
-        
-        // Check if email domain matches selected college
-        if let college = selectedCollege {
-            let isDomainValid = validateEmailForCollege(email: email, collegeId: college.id)
-            if !isDomainValid {
-                showAlert(message: "Please enter a valid \(getCollegeDomain(collegeId: college.id)) email address")
-                return
+
+        // Show loading indicator
+        let loadingAlert = UIAlertController(title: nil, message: "Sending OTP...", preferredStyle: .alert)
+        present(loadingAlert, animated: true)
+
+        Task {
+            do {
+                print("📧 Attempting to send OTP to email: \(email)")
+                
+                // Log the request details
+                print("🔍 Request details:")
+                print("  - Function: send-college-otp")
+                print("  - Body: [\"email\": \"\(email)\"]")
+                
+                let response = try await SupabaseManager.shared.client.functions.invoke(
+                    "send-college-otp",
+                    options: FunctionInvokeOptions(
+                        body: [
+                            "email": email
+                        ]
+                    )
+                )
+                
+                // Dismiss loading indicator
+                loadingAlert.dismiss(animated: true)
+                
+                // Log successful response
+                print("✅ OTP sent successfully!")
+                print("📦 Response: \(response)")
+                
+                // Check if response contains any data
+                if let responseData = response as? [String: Any] {
+                    print("Response data: \(responseData)")
+                }
+
+                let otpVC = CollegeVerificationOTPViewController()
+                otpVC.email = email
+                otpVC.selectedCollege = selectedCollege 
+                otpVC.modalPresentationStyle = .fullScreen
+                otpVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
+                present(otpVC, animated: true)
+
+            } catch {
+                // Dismiss loading indicator
+                loadingAlert.dismiss(animated: true)
+                
+                // Log detailed error information
+                print("❌ Failed to send OTP")
+                print("Error type: \(type(of: error))")
+                print("Error description: \(error.localizedDescription)")
+                
+                // Try to cast to NSError for more details
+                if let nsError = error as NSError? {
+                    print("NSError details:")
+                    print("  - Domain: \(nsError.domain)")
+                    print("  - Code: \(nsError.code)")
+                    print("  - UserInfo: \(nsError.userInfo)")
+                    
+                    // Check for Supabase specific error
+                    if nsError.domain == "Supabase" || nsError.domain.contains("Supabase") {
+                        print("  - This appears to be a Supabase error")
+                    }
+                    
+                    // Check for network errors
+                    if nsError.domain == NSURLErrorDomain {
+                        switch nsError.code {
+                        case NSURLErrorNotConnectedToInternet:
+                            showAlert(message: "No internet connection. Please check your network and try again.")
+                            return
+                        case NSURLErrorTimedOut:
+                            showAlert(message: "Request timed out. Please try again.")
+                            return
+                        case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost:
+                            showAlert(message: "Cannot connect to server. Please check your internet connection.")
+                            return
+                        default:
+                            break
+                        }
+                    }
+                }
+                
+//                // Try to parse the error response if it's from Supabase
+//                if let functionError = error as? FunctionError {
+//                    print("FunctionError details:")
+//                    print("  - Status: \(functionError.status)")
+//                    print("  - Message: \(functionError.message)")
+//                    
+//                    showAlert(message: "Server error: \(functionError.message)")
+//                    return
+//                }
+                
+                // Show generic error message with debug info
+                showAlert(message: "Failed to send OTP. Please check:\n• Internet connection\n• College email domain\n• Try again later\n\nDebug: \(error.localizedDescription)")
             }
         }
-        
-        print("Sending OTP to: \(email)")
-        
-        // Navigate to OTP Verification Screen
-        let otpVC = CollegeVerificationOTPViewController()
-        otpVC.email = email // Pass the email
-        
-        // Present modally instead of pushing
-        otpVC.modalPresentationStyle = .fullScreen
-        otpVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
-        present(otpVC, animated: true)
     }
-    
-    @objc private func dismissKeyboard() {
-        view.endEditing(true)
-    }
+
+
+
+
     
     // MARK: - College Email Validation Helpers
     private func validateEmailForCollege(email: String, collegeId: Int) -> Bool {
@@ -381,3 +463,4 @@ struct CollegeVerificationViewControllerRepresentable: UIViewControllerRepresent
     }
 }
 #endif
+

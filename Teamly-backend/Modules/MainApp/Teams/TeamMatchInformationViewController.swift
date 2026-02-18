@@ -393,19 +393,14 @@ class TeamMatchInformationViewController: UIViewController {
             
             // 4. Combine host + RSVP players (host at the top)
             if let hostPlayer = hostPlayer {
-                // Check if host has also RSVPed
                 let hostHasRSVPed = rsvpPlayers.contains { $0.userId.uuidString == hostPlayer.userId.uuidString }
                 
                 if !hostHasRSVPed {
-                    // Add host to the beginning if they haven't RSVPed
                     allPlayers = [hostPlayer] + rsvpPlayers
                 } else {
-                    // Host already in RSVP list, just use that
                     allPlayers = rsvpPlayers
-                    // Mark the host player in the list
                     if let index = allPlayers.firstIndex(where: { $0.userId.uuidString == hostPlayer.userId.uuidString }) {
-                        // Create a new player with isHost flag
-                        var updatedPlayer = allPlayers[index]
+                        let updatedPlayer = allPlayers[index]
                         allPlayers[index] = PlayerWithProfile(
                             userId: updatedPlayer.userId,
                             name: updatedPlayer.name,
@@ -418,8 +413,13 @@ class TeamMatchInformationViewController: UIViewController {
             } else {
                 allPlayers = rsvpPlayers
             }
-            
-            // 5. Update UI with all fetched data
+
+            // 5. Sort so current user ("You") always appears first
+            allPlayers.sort { lhs, _ in
+                lhs.userId.uuidString == currentUserId
+            }
+
+            // 6. Update UI with all fetched data
             await MainActor.run {
                 self.displayMatchInfo()
                 self.loadingIndicator.stopAnimating()
@@ -712,7 +712,7 @@ class TeamMatchInformationViewController: UIViewController {
         
         // Only show "X going" label
         let playersGoingLabel = UILabel()
-        playersGoingLabel.text = "\(match.playersRSVPed) going"
+        playersGoingLabel.text = "\(match.playersRSVPed + 1) going"
         playersGoingLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         playersGoingLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         playersGoingLabel.translatesAutoresizingMaskIntoConstraints = false

@@ -210,7 +210,7 @@ class SkillLevelViewController: UIViewController {
             verticalSlider.widthAnchor.constraint(equalToConstant: 8),
             verticalSlider.heightAnchor.constraint(equalToConstant: 380),
             
-            // Skill Level Markers
+            // Skill Level Markers — aligned to the slider's top and bottom edges
             skillLevelMarkersStackView.leadingAnchor.constraint(equalTo: sliderContentContainer.leadingAnchor),
             skillLevelMarkersStackView.trailingAnchor.constraint(equalTo: verticalSlider.leadingAnchor, constant: -70),
             skillLevelMarkersStackView.topAnchor.constraint(equalTo: verticalSlider.topAnchor),
@@ -537,7 +537,7 @@ class VerticalSlider: UIView {
     private let trackBackgroundView: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.layer.cornerRadius = 4 // Increased for wider track
+        view.layer.cornerRadius = 4
         view.clipsToBounds = true
         return view
     }()
@@ -546,7 +546,7 @@ class VerticalSlider: UIView {
         let blur = UIBlurEffect(style: .systemUltraThinMaterial)
         let view = UIVisualEffectView(effect: blur)
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.layer.cornerRadius = 10 // Increased for wider track
+        view.layer.cornerRadius = 10
         view.clipsToBounds = true
         return view
     }()
@@ -561,18 +561,62 @@ class VerticalSlider: UIView {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
         view.backgroundColor = .white
-        // Vertical oval shape: taller and narrower
-        view.layer.cornerRadius = 12 // Corner radius for vertical oval
+        view.layer.cornerRadius = 12
         view.layer.shadowColor = UIColor.black.cgColor
         view.layer.shadowOpacity = 0.3
         view.layer.shadowOffset = CGSize(width: 0, height: 2)
         view.layer.shadowRadius = 4
-        //view.layer.borderWidth = 2
         return view
     }()
     
     private var thumbCenterYConstraint: NSLayoutConstraint?
     private var coloredTrackHeightConstraint: NSLayoutConstraint?
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MARK: - Alignment helpers
+    //
+    // The markers stack (skillLevelMarkersStackView) uses .equalSpacing
+    // distribution with 4 labels × 70 pt height over a 380 pt total height.
+    //
+    //   spacing between labels = (380 - 4 × 70) / 3 ≈ 33.33 pt
+    //
+    // Label centre positions measured from the BOTTOM of the 380 pt track:
+    //   Level 0 (Beginner)     → 35 pt   from bottom
+    //   Level 1 (Intermediate) → 138.33 pt from bottom
+    //   Level 2 (Experienced)  → 241.67 pt from bottom
+    //   Level 3 (Advanced)     → 345 pt   from bottom
+    //
+    // The thumb's centerY constraint is anchored to the view's bottomAnchor
+    // with a *negative* constant, so a constant of -35 places the thumb
+    // 35 pt above the bottom — exactly at the Beginner label centre.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private let levelCount: Int    = 4
+    private let labelHeight: CGFloat = 70.0
+    private let totalHeight: CGFloat = 380.0
+
+    /// Y distance from the bottom of the track to the centre of the label
+    /// for the given integer level index (0 = Beginner, 3 = Advanced).
+    private func thumbOffsetFromBottom(forLevel level: Int) -> CGFloat {
+        let spacing = (totalHeight - CGFloat(levelCount) * labelHeight) / CGFloat(levelCount - 1)
+        return CGFloat(level) * (labelHeight + spacing) + labelHeight / 2.0
+    }
+
+    /// Smooth interpolation between level offsets for in-between drag values.
+    private func thumbOffsetFromBottom(forValue val: Float) -> CGFloat {
+        let clamped = max(minimumValue, min(maximumValue, val))
+        let lower   = Int(floor(clamped))
+        let upper   = Int(ceil(clamped))
+
+        guard lower != upper else {
+            return thumbOffsetFromBottom(forLevel: lower)
+        }
+
+        let fraction    = CGFloat(clamped - Float(lower))
+        let lowerOffset = thumbOffsetFromBottom(forLevel: lower)
+        let upperOffset = thumbOffsetFromBottom(forLevel: upper)
+        return lowerOffset + fraction * (upperOffset - lowerOffset)
+    }
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -594,43 +638,49 @@ class VerticalSlider: UIView {
     }
     
     private func setupView() {
-        // Add glass effect background
         addSubview(trackBackgroundView)
         trackBackgroundView.addSubview(blurEffectView)
         trackBackgroundView.addSubview(coloredTrackView)
         addSubview(thumbView)
         
         NSLayoutConstraint.activate([
-            // Track background
+            // Track background fills the full slider view
             trackBackgroundView.leadingAnchor.constraint(equalTo: leadingAnchor),
             trackBackgroundView.trailingAnchor.constraint(equalTo: trailingAnchor),
             trackBackgroundView.topAnchor.constraint(equalTo: topAnchor),
             trackBackgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
             
-            // Blur effect
+            // Blur effect fills the track background
             blurEffectView.leadingAnchor.constraint(equalTo: trackBackgroundView.leadingAnchor),
             blurEffectView.trailingAnchor.constraint(equalTo: trackBackgroundView.trailingAnchor),
             blurEffectView.topAnchor.constraint(equalTo: trackBackgroundView.topAnchor),
             blurEffectView.bottomAnchor.constraint(equalTo: trackBackgroundView.bottomAnchor),
             
-            // Colored track (starts from bottom)
+            // Colored track grows upward from the bottom
             coloredTrackView.leadingAnchor.constraint(equalTo: trackBackgroundView.leadingAnchor),
             coloredTrackView.trailingAnchor.constraint(equalTo: trackBackgroundView.trailingAnchor),
             coloredTrackView.bottomAnchor.constraint(equalTo: trackBackgroundView.bottomAnchor),
             
-            // Thumb - Vertical oval shape: narrower (16) and taller (60)
+            // Thumb size — vertical oval
             thumbView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            thumbView.widthAnchor.constraint(equalToConstant: 24), // Narrower for vertical oval
-            thumbView.heightAnchor.constraint(equalToConstant: 42) // Taller for vertical oval
+            thumbView.widthAnchor.constraint(equalToConstant: 24),
+            thumbView.heightAnchor.constraint(equalToConstant: 42)
         ])
         
-        thumbCenterYConstraint = thumbView.centerYAnchor.constraint(equalTo: bottomAnchor)
+        // Thumb Y: negative constant = distance above the bottom anchor.
+        // Initial value places thumb at the Beginner (level 0) centre.
+        thumbCenterYConstraint = thumbView.centerYAnchor.constraint(
+            equalTo: bottomAnchor,
+            constant: -thumbOffsetFromBottom(forLevel: 0)
+        )
         thumbCenterYConstraint?.isActive = true
         
-        coloredTrackHeightConstraint = coloredTrackView.heightAnchor.constraint(equalToConstant: 0)
+        // Colored track starts at zero height (Beginner)
+        coloredTrackHeightConstraint = coloredTrackView.heightAnchor.constraint(
+            equalToConstant: thumbOffsetFromBottom(forLevel: 0)
+        )
         coloredTrackHeightConstraint?.isActive = true
         
-        // Add gesture recognizer
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         addGestureRecognizer(panGesture)
         
@@ -642,30 +692,29 @@ class VerticalSlider: UIView {
     
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update thumb border color
         thumbView.layer.borderColor = isDarkMode ? UIColor.primaryWhite.cgColor : UIColor.primaryBlack.cgColor
         
-        // Update track background for unselected state
         if trackColor == .tertiaryDark || trackColor == UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.3) {
-            trackBackgroundView.backgroundColor = isDarkMode ? .tertiaryDark : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.3)
+            trackBackgroundView.backgroundColor = isDarkMode
+                ? .tertiaryDark
+                : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.3)
         }
         
-        // Update blur effect style
-        let blurStyle: UIBlurEffect.Style = isDarkMode ? .systemUltraThinMaterialDark : .systemUltraThinMaterialLight
+        let blurStyle: UIBlurEffect.Style = isDarkMode
+            ? .systemUltraThinMaterialDark
+            : .systemUltraThinMaterialLight
         blurEffectView.effect = UIBlurEffect(style: blurStyle)
     }
     
+    // MARK: - Position update
+    //
+    // Both the thumb centre and the coloured-track height are derived from
+    // `thumbOffsetFromBottom(forValue:)`, which maps slider values to the
+    // exact centre of the corresponding label in the markers stack.
     private func updateThumbPosition() {
-        let normalizedValue = (value - minimumValue) / (maximumValue - minimumValue)
-        
-        let bottomOffset: CGFloat = 40 // Space at bottom for beginner level
-        let availableHeight = bounds.height - bottomOffset
-        let yOffset = (availableHeight * CGFloat(normalizedValue)) + bottomOffset
-        
-        thumbCenterYConstraint?.constant = -yOffset
-        coloredTrackHeightConstraint?.constant = yOffset
-        
+        let offset = thumbOffsetFromBottom(forValue: value)
+        thumbCenterYConstraint?.constant  = -offset
+        coloredTrackHeightConstraint?.constant = offset
         layoutIfNeeded()
     }
     
@@ -674,20 +723,15 @@ class VerticalSlider: UIView {
     }
     
     private func snapToNearestLevel() {
-        let currentValue = value
-        let lowerLevel = floor(currentValue)
-        let upperLevel = ceil(currentValue)
-        let progress = currentValue - lowerLevel
-        
-        // Snap up if >= 50%, snap down if < 50%
+        let lowerLevel = floor(value)
+        let upperLevel = ceil(value)
+        let progress   = value - lowerLevel
         let snappedValue = progress >= 0.5 ? upperLevel : lowerLevel
         
-        // Animate the snap
         UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
             self.value = snappedValue
             self.layoutIfNeeded()
         }
-        
         valueChanged?(snappedValue)
     }
     
@@ -696,35 +740,26 @@ class VerticalSlider: UIView {
         updateValueForLocation(location)
         
         if gesture.state == .ended {
-            // Snap to nearest level when user releases
             snapToNearestLevel()
         } else {
             valueChanged?(value)
         }
     }
-
     
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: self)
         updateValueForLocation(location)
-        
-        // Snap to nearest level after tap
         snapToNearestLevel()
     }
     
     private func updateValueForLocation(_ location: CGPoint) {
-        // Invert Y coordinate (bottom = 0, top = max)
+        // Invert Y: bottom of track = level 0, top = level max
         let normalizedY = 1.0 - (location.y / bounds.height)
-        let clampedY = max(0, min(1, normalizedY))
+        let clampedY    = max(0, min(1, normalizedY))
+        let newValue    = minimumValue + Float(clampedY) * (maximumValue - minimumValue)
         
-        let newValue = minimumValue + Float(clampedY) * (maximumValue - minimumValue)
-        
-        if isContinuous {
-            value = newValue
-            valueChanged?(value)
-        } else {
-            value = newValue
-        }
+        value = newValue
+        if isContinuous { valueChanged?(value) }
     }
     
     override func layoutSubviews() {
@@ -764,7 +799,6 @@ class SkillLevelInfoViewController: UIViewController {
     }
     
     private func setupUI() {
-        // Add scroll view and content stack
         view.addSubview(scrollView)
         scrollView.addSubview(contentStackView)
         
@@ -781,7 +815,6 @@ class SkillLevelInfoViewController: UIViewController {
             contentStackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -48)
         ])
         
-        // Add skill level descriptions
         let skillLevels = [
             ("Beginner", "You're new to the sport or have limited experience. Focused on learning basic rules, techniques, and fundamentals."),
             ("Intermediate", "You have a good understanding of the game and basic skills. Can participate comfortably in recreational play."),
@@ -817,7 +850,6 @@ class SkillLevelInfoViewController: UIViewController {
         descriptionLabel.numberOfLines = 0
         descriptionLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Set description label color based on current mode
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         descriptionLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         
@@ -861,16 +893,13 @@ struct SkillLevelViewController_Previews: PreviewProvider {
 
 struct SkillLevelViewControllerRepresentable: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SkillLevelViewController {
-        // Create a sample array of sports for the preview
         let sampleSports = [
-            Sport(id: 1,name: "Football", emoji: "⚽️", created_at: "2026-01-24 17:26:40"),
-            Sport(id: 3,name: "Basketball", emoji: "🏀", created_at: "2026-01-24 17:26:40")
+            Sport(id: 1, name: "Football",   emoji: "⚽️", created_at: "2026-01-24 17:26:40"),
+            Sport(id: 3, name: "Basketball", emoji: "🏀", created_at: "2026-01-24 17:26:40")
         ]
         return SkillLevelViewController(selectedSports: sampleSports)
     }
     
-    func updateUIViewController(_ uiViewController: SkillLevelViewController, context: Context) {
-        // No update needed
-    }
+    func updateUIViewController(_ uiViewController: SkillLevelViewController, context: Context) {}
 }
 #endif

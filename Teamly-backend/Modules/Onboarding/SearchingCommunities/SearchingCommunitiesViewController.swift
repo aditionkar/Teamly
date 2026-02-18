@@ -30,7 +30,8 @@ class SearchingCommunitiesViewController: UIViewController {
         return imageView
     }()
     
-    private let locationAlertView: UIView = {
+    // NEW: Search Alert View (replaces location alert)
+    private let searchAlertView: UIView = {
         let view = UIView()
         view.layer.cornerRadius = 14
         view.layer.masksToBounds = true
@@ -38,18 +39,18 @@ class SearchingCommunitiesViewController: UIViewController {
         return view
     }()
     
-    private let alertTitleLabel: UILabel = {
+    private let searchAlertTitleLabel: UILabel = {
         let label = UILabel()
-        label.text = "Enable Location"
+        label.text = "Join College Community"
         label.font = UIFont(name: "SFProDisplay-Semibold", size: 17) ?? UIFont.systemFont(ofSize: 17, weight: .semibold)
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
     
-    private let alertDescriptionLabel: UILabel = {
+    private let searchAlertDescriptionLabel: UILabel = {
         let label = UILabel()
-        label.text = "To search existing communities near your location"
+        label.text = "To join your college community we need your college city"
         label.font = UIFont(name: "SFProText-Regular", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .regular)
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -57,85 +58,15 @@ class SearchingCommunitiesViewController: UIViewController {
         return label
     }()
     
-    private let buttonsStackView: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .horizontal
-        stackView.distribution = .fillEqually
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        return stackView
+    private let searchSeparatorLine: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
     }()
     
-    private let disableButton: UIButton = {
+    private let searchButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Disable", for: .normal)
-        button.titleLabel?.font = UIFont(name: "SFProText-Regular", size: 17) ?? UIFont.systemFont(ofSize: 17, weight: .regular)
-        button.setTitleColor(.systemBlue, for: .normal)
-        button.backgroundColor = .clear
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }()
-    
-    private let enableButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("Enable", for: .normal)
-        button.titleLabel?.font = UIFont(name: "SFProText-Semibold", size: 17) ?? UIFont.systemFont(ofSize: 17, weight: .semibold)
-        button.setTitleColor(.systemBlue, for: .normal)
-        button.backgroundColor = .clear
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }()
-    
-    private let separatorLine1: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-    
-    private let separatorLine2: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-    
-    // NEW: Secondary alert view for disable action
-    private let secondaryAlertView: UIView = {
-        let view = UIView()
-        view.layer.cornerRadius = 14
-        view.layer.masksToBounds = true
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.alpha = 0
-        view.isHidden = true
-        return view
-    }()
-    
-    private let secondaryAlertTitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "We Need Your Location"
-        label.font = UIFont(name: "SFProDisplay-Semibold", size: 17) ?? UIFont.systemFont(ofSize: 17, weight: .semibold)
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
-    private let secondaryAlertDescriptionLabel: UILabel = {
-        let label = UILabel()
-        label.text = "We need your location to search nearby communities"
-        label.font = UIFont(name: "SFProText-Regular", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .regular)
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
-    private let secondarySeparatorLine: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-    
-    private let secondaryEnableButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("Enable", for: .normal)
+        button.setTitle("Search", for: .normal)
         button.titleLabel?.font = UIFont(name: "SFProText-Semibold", size: 17) ?? UIFont.systemFont(ofSize: 17, weight: .semibold)
         button.setTitleColor(.systemBlue, for: .normal)
         button.backgroundColor = .clear
@@ -195,24 +126,13 @@ class SearchingCommunitiesViewController: UIViewController {
         topGreenTint.layer.addSublayer(gradientLayer)
         
         view.addSubview(backgroundImageView)
-        view.addSubview(locationAlertView)
+        view.addSubview(searchAlertView)
         
-        // Add alert content
-        locationAlertView.addSubview(alertTitleLabel)
-        locationAlertView.addSubview(alertDescriptionLabel)
-        locationAlertView.addSubview(separatorLine1)
-        locationAlertView.addSubview(buttonsStackView)
-        locationAlertView.addSubview(separatorLine2)
-        
-        buttonsStackView.addArrangedSubview(disableButton)
-        buttonsStackView.addArrangedSubview(enableButton)
-        
-        // Setup secondary alert
-        view.addSubview(secondaryAlertView)
-        secondaryAlertView.addSubview(secondaryAlertTitleLabel)
-        secondaryAlertView.addSubview(secondaryAlertDescriptionLabel)
-        secondaryAlertView.addSubview(secondarySeparatorLine)
-        secondaryAlertView.addSubview(secondaryEnableButton)
+        // Add search alert content
+        searchAlertView.addSubview(searchAlertTitleLabel)
+        searchAlertView.addSubview(searchAlertDescriptionLabel)
+        searchAlertView.addSubview(searchSeparatorLine)
+        searchAlertView.addSubview(searchButton)
         
         view.addSubview(searchingLabel)
     }
@@ -231,99 +151,48 @@ class SearchingCommunitiesViewController: UIViewController {
         NSLayoutConstraint.activate([
             backgroundImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             backgroundImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -50),
-            backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10), // Reduced from 20 to 10
-            backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10), // Reduced from -20 to -10
-            backgroundImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 350) // Increased from 300 to 350
+            backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            backgroundImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 350)
         ])
 
-        // Location Alert View - Centered on top of the image
+        // Search Alert View - Centered on top of the image
         NSLayoutConstraint.activate([
-            locationAlertView.centerXAnchor.constraint(equalTo: backgroundImageView.centerXAnchor),
-            locationAlertView.centerYAnchor.constraint(equalTo: backgroundImageView.centerYAnchor),
-            locationAlertView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            locationAlertView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
+            searchAlertView.centerXAnchor.constraint(equalTo: backgroundImageView.centerXAnchor),
+            searchAlertView.centerYAnchor.constraint(equalTo: backgroundImageView.centerYAnchor),
+            searchAlertView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
+            searchAlertView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
         ])
         
-        // Alert Title Label
+        // Search Alert Title Label
         NSLayoutConstraint.activate([
-            alertTitleLabel.topAnchor.constraint(equalTo: locationAlertView.topAnchor, constant: 20),
-            alertTitleLabel.leadingAnchor.constraint(equalTo: locationAlertView.leadingAnchor, constant: 16),
-            alertTitleLabel.trailingAnchor.constraint(equalTo: locationAlertView.trailingAnchor, constant: -16)
+            searchAlertTitleLabel.topAnchor.constraint(equalTo: searchAlertView.topAnchor, constant: 20),
+            searchAlertTitleLabel.leadingAnchor.constraint(equalTo: searchAlertView.leadingAnchor, constant: 16),
+            searchAlertTitleLabel.trailingAnchor.constraint(equalTo: searchAlertView.trailingAnchor, constant: -16)
         ])
         
-        // Alert Description Label
+        // Search Alert Description Label
         NSLayoutConstraint.activate([
-            alertDescriptionLabel.topAnchor.constraint(equalTo: alertTitleLabel.bottomAnchor, constant: 8),
-            alertDescriptionLabel.leadingAnchor.constraint(equalTo: locationAlertView.leadingAnchor, constant: 16),
-            alertDescriptionLabel.trailingAnchor.constraint(equalTo: locationAlertView.trailingAnchor, constant: -16)
+            searchAlertDescriptionLabel.topAnchor.constraint(equalTo: searchAlertTitleLabel.bottomAnchor, constant: 8),
+            searchAlertDescriptionLabel.leadingAnchor.constraint(equalTo: searchAlertView.leadingAnchor, constant: 16),
+            searchAlertDescriptionLabel.trailingAnchor.constraint(equalTo: searchAlertView.trailingAnchor, constant: -16)
         ])
         
-        // First Separator Line (between description and buttons)
+        // Separator Line
         NSLayoutConstraint.activate([
-            separatorLine1.topAnchor.constraint(equalTo: alertDescriptionLabel.bottomAnchor, constant: 20),
-            separatorLine1.leadingAnchor.constraint(equalTo: locationAlertView.leadingAnchor),
-            separatorLine1.trailingAnchor.constraint(equalTo: locationAlertView.trailingAnchor),
-            separatorLine1.heightAnchor.constraint(equalToConstant: 0.5)
+            searchSeparatorLine.topAnchor.constraint(equalTo: searchAlertDescriptionLabel.bottomAnchor, constant: 20),
+            searchSeparatorLine.leadingAnchor.constraint(equalTo: searchAlertView.leadingAnchor),
+            searchSeparatorLine.trailingAnchor.constraint(equalTo: searchAlertView.trailingAnchor),
+            searchSeparatorLine.heightAnchor.constraint(equalToConstant: 0.5)
         ])
         
-        // Buttons Stack View
+        // Search Button
         NSLayoutConstraint.activate([
-            buttonsStackView.topAnchor.constraint(equalTo: separatorLine1.bottomAnchor),
-            buttonsStackView.leadingAnchor.constraint(equalTo: locationAlertView.leadingAnchor),
-            buttonsStackView.trailingAnchor.constraint(equalTo: locationAlertView.trailingAnchor),
-            buttonsStackView.heightAnchor.constraint(equalToConstant: 44)
-        ])
-        
-        // Second Separator Line (between buttons)
-        NSLayoutConstraint.activate([
-            separatorLine2.centerXAnchor.constraint(equalTo: locationAlertView.centerXAnchor),
-            separatorLine2.topAnchor.constraint(equalTo: separatorLine1.bottomAnchor),
-            separatorLine2.bottomAnchor.constraint(equalTo: buttonsStackView.bottomAnchor),
-            separatorLine2.widthAnchor.constraint(equalToConstant: 0.5)
-        ])
-        
-        // Location Alert View Bottom Constraint (based on buttons)
-        NSLayoutConstraint.activate([
-            locationAlertView.bottomAnchor.constraint(equalTo: buttonsStackView.bottomAnchor)
-        ])
-        
-        // Secondary Alert View - Same position as first alert
-        NSLayoutConstraint.activate([
-            secondaryAlertView.centerXAnchor.constraint(equalTo: backgroundImageView.centerXAnchor),
-            secondaryAlertView.centerYAnchor.constraint(equalTo: backgroundImageView.centerYAnchor),
-            secondaryAlertView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            secondaryAlertView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
-        ])
-        
-        // Secondary Alert Title Label
-        NSLayoutConstraint.activate([
-            secondaryAlertTitleLabel.topAnchor.constraint(equalTo: secondaryAlertView.topAnchor, constant: 20),
-            secondaryAlertTitleLabel.leadingAnchor.constraint(equalTo: secondaryAlertView.leadingAnchor, constant: 16),
-            secondaryAlertTitleLabel.trailingAnchor.constraint(equalTo: secondaryAlertView.trailingAnchor, constant: -16)
-        ])
-        
-        // Secondary Alert Description Label
-        NSLayoutConstraint.activate([
-            secondaryAlertDescriptionLabel.topAnchor.constraint(equalTo: secondaryAlertTitleLabel.bottomAnchor, constant: 8),
-            secondaryAlertDescriptionLabel.leadingAnchor.constraint(equalTo: secondaryAlertView.leadingAnchor, constant: 16),
-            secondaryAlertDescriptionLabel.trailingAnchor.constraint(equalTo: secondaryAlertView.trailingAnchor, constant: -16)
-        ])
-        
-        // Secondary Separator Line (between description and button)
-        NSLayoutConstraint.activate([
-            secondarySeparatorLine.topAnchor.constraint(equalTo: secondaryAlertDescriptionLabel.bottomAnchor, constant: 20),
-            secondarySeparatorLine.leadingAnchor.constraint(equalTo: secondaryAlertView.leadingAnchor),
-            secondarySeparatorLine.trailingAnchor.constraint(equalTo: secondaryAlertView.trailingAnchor),
-            secondarySeparatorLine.heightAnchor.constraint(equalToConstant: 0.5)
-        ])
-        
-        // Secondary Enable Button
-        NSLayoutConstraint.activate([
-            secondaryEnableButton.topAnchor.constraint(equalTo: secondarySeparatorLine.bottomAnchor),
-            secondaryEnableButton.leadingAnchor.constraint(equalTo: secondaryAlertView.leadingAnchor),
-            secondaryEnableButton.trailingAnchor.constraint(equalTo: secondaryAlertView.trailingAnchor),
-            secondaryEnableButton.heightAnchor.constraint(equalToConstant: 44),
-            secondaryAlertView.bottomAnchor.constraint(equalTo: secondaryEnableButton.bottomAnchor)
+            searchButton.topAnchor.constraint(equalTo: searchSeparatorLine.bottomAnchor),
+            searchButton.leadingAnchor.constraint(equalTo: searchAlertView.leadingAnchor),
+            searchButton.trailingAnchor.constraint(equalTo: searchAlertView.trailingAnchor),
+            searchButton.heightAnchor.constraint(equalToConstant: 44),
+            searchAlertView.bottomAnchor.constraint(equalTo: searchButton.bottomAnchor)
         ])
         
         // Searching Label - Just below the image
@@ -342,23 +211,15 @@ class SearchingCommunitiesViewController: UIViewController {
         // Update view background
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
         
-        // Update alert view backgrounds
-        locationAlertView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        secondaryAlertView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+        // Update search alert view background
+        searchAlertView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         
         // Update alert label colors
-        alertTitleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        alertDescriptionLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        secondaryAlertTitleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        secondaryAlertDescriptionLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
+        searchAlertTitleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
+        searchAlertDescriptionLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         
-        // Update separator line colors
-        separatorLine1.backgroundColor = isDarkMode ? UIColor.systemGray : UIColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1.0)
-        separatorLine2.backgroundColor = isDarkMode ? UIColor.systemGray : UIColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1.0)
-        secondarySeparatorLine.backgroundColor = isDarkMode ? UIColor.systemGray : UIColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1.0)
-        
-        // Update button colors (systemBlue works well in both modes)
-        // Buttons already use .systemBlue which adapts automatically
+        // Update separator line color
+        searchSeparatorLine.backgroundColor = isDarkMode ? UIColor.systemGray : UIColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1.0)
         
         // Update searching label color
         searchingLabel.textColor = isDarkMode ? .tertiaryLight : .tertiaryDark
@@ -388,53 +249,16 @@ class SearchingCommunitiesViewController: UIViewController {
     }
     
     private func setupActions() {
-        disableButton.addTarget(self, action: #selector(disableButtonTapped), for: .touchUpInside)
-        enableButton.addTarget(self, action: #selector(enableButtonTapped), for: .touchUpInside)
-        secondaryEnableButton.addTarget(self, action: #selector(secondaryEnableButtonTapped), for: .touchUpInside)
+        searchButton.addTarget(self, action: #selector(searchButtonTapped), for: .touchUpInside)
     }
     
     // MARK: - Actions
-    @objc private func disableButtonTapped() {
-        // Hide the first alert and show the secondary alert
+    @objc private func searchButtonTapped() {
+        // Hide the search alert
         UIView.animate(withDuration: 0.3, animations: {
-            self.locationAlertView.alpha = 0
+            self.searchAlertView.alpha = 0
         }) { _ in
-            self.locationAlertView.isHidden = true
-            
-            // Show secondary alert
-            self.secondaryAlertView.isHidden = false
-            UIView.animate(withDuration: 0.3) {
-                self.secondaryAlertView.alpha = 1
-            }
-        }
-    }
-    
-    @objc private func enableButtonTapped() {
-        handleLocationEnable()
-    }
-    
-    @objc private func secondaryEnableButtonTapped() {
-        // Hide secondary alert and proceed with location enable
-        UIView.animate(withDuration: 0.3, animations: {
-            self.secondaryAlertView.alpha = 0
-        }) { _ in
-            self.secondaryAlertView.isHidden = true
-            self.handleLocationEnable()
-        }
-    }
-    
-    private func handleLocationEnable() {
-        // Hide any visible alert view
-        UIView.animate(withDuration: 0.3, animations: {
-            if !self.locationAlertView.isHidden {
-                self.locationAlertView.alpha = 0
-            }
-            if !self.secondaryAlertView.isHidden {
-                self.secondaryAlertView.alpha = 0
-            }
-        }) { _ in
-            self.locationAlertView.isHidden = true
-            self.secondaryAlertView.isHidden = true
+            self.searchAlertView.isHidden = true
             
             // Show searching label
             UIView.animate(withDuration: 0.5) {
@@ -449,26 +273,30 @@ class SearchingCommunitiesViewController: UIViewController {
     }
     
     private func presentNextModal() {
-        let collegesModalVC = CollegesModalViewController()
+        let collegeCityModalVC = CollegeCityViewController()
         
-        if let sheet = collegesModalVC.sheetPresentationController {
+        if let sheet = collegeCityModalVC.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = 24
         }
-        collegesModalVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
-        present(collegesModalVC, animated: true)
+        collegeCityModalVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
+        present(collegeCityModalVC, animated: true)
     }
 }
 
-// MARK: - Colleges Modal View Controller
+
+// MARK: - Updated CollegesModalViewController to accept data
 class CollegesModalViewController: UIViewController {
+    
+    // MARK: - Properties
+    var colleges: [College] = []
+    var cityName: String = ""
     
     // MARK: - UI Elements
     private let titleLabel: UILabel = {
         let label = UILabel()
-        label.text = "Chennai , Tamil Nadu"
-        label.font = UIFont(name: "SFProDisplay-Semibold", size: 20) ?? UIFont.systemFont(ofSize: 20, weight: .bold)
+        label.font = UIFont.systemFont(ofSize: 22, weight: .bold)
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
@@ -481,16 +309,6 @@ class CollegesModalViewController: UIViewController {
         return tableView
     }()
     
-    private let loadingIndicator: UIActivityIndicatorView = {
-        let indicator = UIActivityIndicatorView(style: .medium)
-        indicator.translatesAutoresizingMaskIntoConstraints = false
-        indicator.hidesWhenStopped = true
-        return indicator
-    }()
-    
-    // MARK: - Properties
-    private var colleges: [College] = []
-    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -498,7 +316,8 @@ class CollegesModalViewController: UIViewController {
         setupTableView()
         setupConstraints()
         updateColors()
-        fetchCollegesFromSupabase()
+        
+        titleLabel.text = cityName
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -517,7 +336,6 @@ class CollegesModalViewController: UIViewController {
     private func setupUI() {
         view.addSubview(titleLabel)
         view.addSubview(tableView)
-        view.addSubview(loadingIndicator)
     }
     
     private func updateColors() {
@@ -533,7 +351,6 @@ class CollegesModalViewController: UIViewController {
         view.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         titleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         tableView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        loadingIndicator.color = isDarkMode ? .white : .black
         
         tableView.reloadData()
     }
@@ -546,59 +363,19 @@ class CollegesModalViewController: UIViewController {
     
     private func setupConstraints() {
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 50),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             
-            tableView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 40),
+            tableView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            
-            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
-    }
-    
-    // MARK: - Fetch Colleges from Supabase
-    private func fetchCollegesFromSupabase() {
-        loadingIndicator.startAnimating()
-        
-        Task {
-            do {
-                let response: [College] = try await SupabaseManager.shared.client
-                    .from("colleges")
-                    .select("id, name, location")
-                    .order("name", ascending: true)
-                    .execute()
-                    .value
-                
-                await MainActor.run {
-                    self.colleges = response
-                    self.tableView.reloadData()
-                    self.loadingIndicator.stopAnimating()
-                }
-                
-            } catch {
-                await MainActor.run {
-                    self.loadingIndicator.stopAnimating()
-                    print("Error fetching colleges: \(error)")
-                    
-                    // Show error alert
-                    let alert = UIAlertController(
-                        title: "Error",
-                        message: "Failed to load colleges. Please try again.",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
-                }
-            }
-        }
     }
 }
 
-// MARK: - College Model (update to match your Supabase table)
+// MARK: - College Model
 struct College: Codable {
     let id: Int
     let name: String
@@ -637,9 +414,6 @@ extension CollegesModalViewController: UITableViewDelegate, UITableViewDataSourc
     private func handleJoinCollege(_ college: College) {
         print("Join button tapped for: \(college.name)")
         
-        // Save college ID immediately
-        saveCollegeId(college.id)
-        
         // Then show verification screen
         let verificationVC = CollegeVerificationViewController()
         verificationVC.selectedCollege = college
@@ -647,57 +421,6 @@ extension CollegesModalViewController: UITableViewDelegate, UITableViewDataSourc
         verificationVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
         present(verificationVC, animated: true)
     }
-    
-    private func saveCollegeId(_ collegeId: Int) {
-        // Show loading indicator
-        let loadingIndicator = UIActivityIndicatorView(style: .medium)
-        loadingIndicator.center = view.center
-        loadingIndicator.startAnimating()
-        view.addSubview(loadingIndicator)
-        
-        Task {
-            do {
-                let session = try await SupabaseManager.shared.client.auth.session
-                let userId = session.user.id
-                
-                // Save college using ProfileManager
-                try await ProfileManager.shared.saveCollege(
-                    userId: userId,
-                    collegeId: collegeId
-                )
-
-                await MainActor.run {
-                    loadingIndicator.removeFromSuperview()
-                    
-                    // Show success message
-                    let alert = UIAlertController(
-                        title: "Success",
-                        message: "College saved successfully!",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
-                }
-                
-            } catch {
-                await MainActor.run {
-                    loadingIndicator.removeFromSuperview()
-                    
-                    print("Error saving college ID: \(error.localizedDescription)")
-                    
-                    // Show error alert
-                    let alert = UIAlertController(
-                        title: "Error",
-                        message: "Failed to save college. Please try again.",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(alert, animated: true)
-                }
-            }
-        }
-    }
-
 }
 
 // MARK: - College Table View Cell
@@ -711,7 +434,6 @@ class CollegeTableViewCell: UITableViewCell {
         return view
     }()
 
-    
     private let collegeNameLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont(name: "SFProText-Bold", size: 16) ?? UIFont.systemFont(ofSize: 16, weight: .bold)
@@ -798,11 +520,11 @@ class CollegeTableViewCell: UITableViewCell {
             collegeNameLabel.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
             collegeNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: joinButton.leadingAnchor, constant: -12),
             
-            // Join Button - Adjusted for better appearance with background
+            // Join Button
             joinButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
             joinButton.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            joinButton.widthAnchor.constraint(equalToConstant: 70), // Increased width for better appearance
-            joinButton.heightAnchor.constraint(equalToConstant: 36) // Fixed height for rounded corners
+            joinButton.widthAnchor.constraint(equalToConstant: 70),
+            joinButton.heightAnchor.constraint(equalToConstant: 36)
         ])
     }
     
@@ -821,6 +543,7 @@ class CollegeTableViewCell: UITableViewCell {
         onJoinTapped?()
     }
 }
+
 
 // MARK: - SwiftUI Preview
 #if canImport(SwiftUI) && DEBUG
@@ -852,3 +575,5 @@ struct SearchingCommunitiesViewControllerRepresentable: UIViewControllerRepresen
     }
 }
 #endif
+
+

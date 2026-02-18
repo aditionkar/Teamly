@@ -63,7 +63,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.IDETestFailureBreakpoint">
          <BreakpointContent
             uuid = "80DD9E1C-7997-4227-92FB-38AE10D2FCD1"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             breakpointStackSelectionBehavior = "1">
@@ -72,16 +72,16 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "EF4383A2-7495-4859-9333-6827729FC923"
+            uuid = "A03BE698-F329-4EA4-A574-646664836CFC"
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "Teamly-backend/Modules/Onboarding/ProfileSetup/SkillLevelViewController.swift"
+            filePath = "Teamly-backend/Modules/Onboarding/CollegeVerification/CollegeVerificationOTPViewController.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "855"
-            endingLineNumber = "855"
-            landmarkName = "previews"
+            startingLineNumber = "95"
+            endingLineNumber = "95"
+            landmarkName = "resendButton"
             landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>

@@ -237,6 +237,8 @@ class MatchViewController: UIViewController {
     private func combineDateAndTime(date: Date, time: Date) -> Date {
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        
+        // Extract time components from the time date
         let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: time)
         
         var combinedComponents = DateComponents()
@@ -247,6 +249,7 @@ class MatchViewController: UIViewController {
         combinedComponents.minute = timeComponents.minute
         combinedComponents.second = timeComponents.second
         
+        // Use the system's calendar which respects local timezone
         return calendar.date(from: combinedComponents) ?? date
     }
     

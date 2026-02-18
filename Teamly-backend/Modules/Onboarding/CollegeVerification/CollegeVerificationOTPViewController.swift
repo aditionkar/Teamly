@@ -6,11 +6,13 @@
 //
 
 import UIKit
+import Supabase
 
 class CollegeVerificationOTPViewController: UIViewController {
     
     // MARK: - Properties
     var email: String = ""
+    var selectedCollege: College? // Add this property to receive the college
     
     // MARK: - UI Elements
     private let topGreenTint: UIView = {
@@ -86,8 +88,6 @@ class CollegeVerificationOTPViewController: UIViewController {
         return button
     }()
     
-    
-    
     private let resendButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Resend OTP", for: .normal)
@@ -131,6 +131,10 @@ class CollegeVerificationOTPViewController: UIViewController {
         }
     }
     
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+
     // MARK: - Setup
     private func setupUI() {
         // Set initial background color
@@ -293,6 +297,69 @@ class CollegeVerificationOTPViewController: UIViewController {
         gradientLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
     }
     
+    // MARK: - College ID Saving Function
+    private func saveCollegeId(_ collegeId: Int) {
+        // Show loading indicator
+        let loadingIndicator = UIActivityIndicatorView(style: .medium)
+        loadingIndicator.center = view.center
+        loadingIndicator.startAnimating()
+        view.addSubview(loadingIndicator)
+        
+        Task {
+            do {
+                // Get the current user's session
+                let session = try await SupabaseManager.shared.client.auth.session
+                let userId = session.user.id
+                
+                print("📝 Saving college ID \(collegeId) for user: \(userId)")
+                
+                // Update the user's profile with the college ID
+                try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .update(["college_id": collegeId])
+                    .eq("id", value: userId)
+                    .execute()
+                
+                await MainActor.run {
+                    loadingIndicator.removeFromSuperview()
+                    
+                    print("✅ College ID saved successfully!")
+                    
+                    // Show success message
+                    let alert = UIAlertController(
+                        title: "Success",
+                        message: "College verified and saved successfully!",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        // Navigate to tab bar controller after success
+                        self.navigateToTabBarController()
+                    })
+                    self.present(alert, animated: true)
+                }
+                
+            } catch {
+                await MainActor.run {
+                    loadingIndicator.removeFromSuperview()
+                    
+                    print("❌ Error saving college ID: \(error.localizedDescription)")
+                    
+                    // Show error alert with retry option
+                    let alert = UIAlertController(
+                        title: "Error",
+                        message: "Failed to save college. Please try again.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "Retry", style: .default) { _ in
+                        self.saveCollegeId(collegeId)
+                    })
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+    
     // MARK: - Actions
     @objc private func verifyTapped() {
         let otp = otpTextFields.map { $0.text ?? "" }.joined()
@@ -303,26 +370,120 @@ class CollegeVerificationOTPViewController: UIViewController {
             return
         }
         
-        print("Verifying OTP: \(otp) for email: \(email)")
+        // Check if college is selected
+        guard let college = selectedCollege else {
+            showAlert(message: "College information missing")
+            return
+        }
+        
+        print("🔐 Verifying OTP: \(otp) for email: \(email)")
+        print("🏫 College: \(college.name) (ID: \(college.id))")
+        
+        // Show loading indicator
+        let loadingAlert = UIAlertController(title: nil, message: "Verifying OTP...", preferredStyle: .alert)
+        present(loadingAlert, animated: true)
         
         // Handle actual OTP verification API call here
-        verifyOTP(otp: otp)
+        verifyOTP(otp: otp, college: college, loadingAlert: loadingAlert)
     }
 
-    private func verifyOTP(otp: String) {
-        
-        let isOTPValid = true
-        
-        if isOTPValid {
-            // OTP is valid, navigate to main app
-            dismiss(animated: true) { [weak self] in
-                self?.navigateToTabBarController()
+    private func verifyOTP(otp: String, college: College, loadingAlert: UIAlertController) {
+        Task {
+            do {
+                print("📤 Sending verification request...")
+                print("🔍 Request details:")
+                print("  - Function: verify-college-otp")
+                print("  - Body: [\"email\": \"\(email)\", \"otp\": \"\(otp)\"]")
+                
+                let response = try await SupabaseManager.shared.client.functions.invoke(
+                    "verify-college-otp",
+                    options: FunctionInvokeOptions(
+                        body: [
+                            "email": email,
+                            "otp": otp
+                        ]
+                    )
+                )
+                
+                // Dismiss loading indicator
+                await MainActor.run {
+                    loadingAlert.dismiss(animated: true)
+                }
+                
+                print("✅ OTP verification successful!")
+                print("📦 Response: \(response)")
+                
+                // Check if response contains any data
+                if let responseData = response as? [String: Any] {
+                    print("Response data: \(responseData)")
+                }
+
+                // Save the college ID to the user's profile
+                await MainActor.run {
+                    self.saveCollegeId(college.id)
+                }
+
+            } catch {
+                // Dismiss loading indicator
+                await MainActor.run {
+                    loadingAlert.dismiss(animated: true)
+                }
+                
+                // Log detailed error information
+                print("❌ OTP verification failed")
+                print("Error type: \(type(of: error))")
+                print("Error description: \(error.localizedDescription)")
+                
+                // Try to cast to NSError for more details
+                if let nsError = error as NSError? {
+                    print("NSError details:")
+                    print("  - Domain: \(nsError.domain)")
+                    print("  - Code: \(nsError.code)")
+                    print("  - UserInfo: \(nsError.userInfo)")
+                    
+                    // Check for network errors
+                    if nsError.domain == NSURLErrorDomain {
+                        switch nsError.code {
+                        case NSURLErrorNotConnectedToInternet:
+                            await MainActor.run {
+                                showAlert(message: "No internet connection. Please check your network and try again.")
+                            }
+                            return
+                        case NSURLErrorTimedOut:
+                            await MainActor.run {
+                                showAlert(message: "Request timed out. Please try again.")
+                            }
+                            return
+                        default:
+                            break
+                        }
+                    }
+                }
+                
+                // Try to decode error response if it's data
+                if let errorData = error as? Data {
+                    do {
+                        if let jsonError = try JSONSerialization.jsonObject(with: errorData) as? [String: Any] {
+                            print("📄 Error response JSON: \(jsonError)")
+                            
+                            if let errorMessage = jsonError["message"] as? String {
+                                await MainActor.run {
+                                    showAlert(message: errorMessage)
+                                }
+                                return
+                            }
+                        }
+                    } catch {
+                        print("Could not parse error data: \(error)")
+                    }
+                }
+                
+                await MainActor.run {
+                    showAlert(message: "Invalid or expired OTP")
+                    otpTextFields.forEach { $0.text = "" }
+                    otpTextFields.first?.becomeFirstResponder()
+                }
             }
-        } else {
-            showAlert(message: "Invalid OTP. Please try again.")
-            // Clear OTP fields for retry
-            otpTextFields.forEach { $0.text = "" }
-            otpTextFields.first?.becomeFirstResponder()
         }
     }
 
@@ -349,17 +510,64 @@ class CollegeVerificationOTPViewController: UIViewController {
     }
     
     @objc private func resendTapped() {
-        print("Resending OTP to: \(email)")
-        // Handle resend OTP logic here
-        showAlert(message: "OTP resent to \(email)")
+        print("🔄 Resend OTP requested for email: \(email)")
         
-        // Clear existing OTP fields
-        otpTextFields.forEach { $0.text = "" }
-        otpTextFields.first?.becomeFirstResponder()
-    }
-    
-    @objc private func dismissKeyboard() {
-        view.endEditing(true)
+        // Show loading indicator
+        let loadingAlert = UIAlertController(title: nil, message: "Resending OTP...", preferredStyle: .alert)
+        present(loadingAlert, animated: true)
+        
+        Task {
+            do {
+                print("📤 Sending resend OTP request...")
+                print("🔍 Request details:")
+                print("  - Function: send-college-otp")
+                print("  - Body: [\"email\": \"\(email)\"]")
+                
+                let response = try await SupabaseManager.shared.client.functions.invoke(
+                    "send-college-otp",
+                    options: FunctionInvokeOptions(
+                        body: [
+                            "email": email
+                        ]
+                    )
+                )
+                
+                // Dismiss loading indicator
+                await MainActor.run {
+                    loadingAlert.dismiss(animated: true)
+                }
+                
+                print("✅ OTP resent successfully!")
+                print("📦 Response: \(response)")
+
+                await MainActor.run {
+                    otpTextFields.forEach { $0.text = "" }
+                    otpTextFields.first?.becomeFirstResponder()
+                    showAlert(message: "OTP resent to \(email)")
+                }
+
+            } catch {
+                // Dismiss loading indicator
+                await MainActor.run {
+                    loadingAlert.dismiss(animated: true)
+                }
+                
+                print("❌ Failed to resend OTP")
+                print("Error type: \(type(of: error))")
+                print("Error description: \(error.localizedDescription)")
+                
+                if let nsError = error as NSError? {
+                    print("NSError details:")
+                    print("  - Domain: \(nsError.domain)")
+                    print("  - Code: \(nsError.code)")
+                    print("  - UserInfo: \(nsError.userInfo)")
+                }
+                
+                await MainActor.run {
+                    showAlert(message: "Failed to resend OTP. Please try again.")
+                }
+            }
+        }
     }
     
     // MARK: - Helpers
@@ -422,36 +630,3 @@ extension CollegeVerificationOTPViewController: UITextFieldDelegate {
         textField.layer.borderWidth = 0.7
     }
 }
-
-// MARK: - SwiftUI Preview
-#if canImport(SwiftUI) && DEBUG
-import SwiftUI
-
-struct CollegeVerificationOTPViewController_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            CollegeVerificationOTPViewControllerRepresentable()
-                .edgesIgnoringSafeArea(.all)
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Mode")
-            
-            CollegeVerificationOTPViewControllerRepresentable()
-                .edgesIgnoringSafeArea(.all)
-                .preferredColorScheme(.light)
-                .previewDisplayName("Light Mode")
-        }
-    }
-}
-
-struct CollegeVerificationOTPViewControllerRepresentable: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> CollegeVerificationOTPViewController {
-        let vc = CollegeVerificationOTPViewController()
-        vc.email = "student@college.edu" // Sample email for preview
-        return vc
-    }
-    
-    func updateUIViewController(_ uiViewController: CollegeVerificationOTPViewController, context: Context) {
-        // No update needed
-    }
-}
-#endif

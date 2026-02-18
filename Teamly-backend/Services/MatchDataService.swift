@@ -1,5 +1,5 @@
 //
-//  MatchDataService.swift - DEBUG VERSION
+//  MatchDataService.swift - UPDATED VERSION
 //
 //  Teamly-backend
 //
@@ -39,20 +39,42 @@ class MatchDataService {
                     }
                     return
                 }
-
-                let matchIds = try await fetchMatchIds(userId: currentUserId)
                 
-                if matchIds.isEmpty {
-                    DispatchQueue.main.async {
-                        completion(.success([]))
-                    }
-                    return
+                print("🔍 [DEBUG] Fetching matches for user: \(currentUserId)")
+                
+                // Get matches the user has joined (RSVP'd)
+                let joinedMatchIds = try await fetchJoinedMatchIds(userId: currentUserId)
+                print("✅ [DEBUG] Found \(joinedMatchIds.count) joined matches")
+                
+                // Get matches the user has created
+                let createdMatches = try await fetchCreatedMatches(userId: currentUserId)
+                print("✅ [DEBUG] Found \(createdMatches.count) created matches")
+                
+                // Combine both sets, avoiding duplicates
+                var allMatches: [DBMatch] = []
+                var processedIds = Set<String>()
+                
+                // Add created matches first
+                for match in createdMatches {
+                    allMatches.append(match)
+                    processedIds.insert(match.id.uuidString)
                 }
-
-                let matches = try await fetchMatchDetails(matchIds: matchIds)
-
+                
+                // If we have joined match IDs that aren't already in created matches, fetch them
+                if !joinedMatchIds.isEmpty {
+                    let matchesToFetch = joinedMatchIds.filter { !processedIds.contains($0) }
+                    
+                    if !matchesToFetch.isEmpty {
+                        print("🔍 [DEBUG] Fetching details for \(matchesToFetch.count) joined matches not already in created")
+                        let joinedMatches = try await fetchMatchDetails(matchIds: matchesToFetch, currentUserId: currentUserId)
+                        allMatches.append(contentsOf: joinedMatches)
+                    }
+                }
+                
+                print("✅ [DEBUG] Total unique matches: \(allMatches.count)")
+                
                 DispatchQueue.main.async {
-                    completion(.success(matches))
+                    completion(.success(allMatches))
                 }
                 
             } catch {
@@ -64,16 +86,15 @@ class MatchDataService {
         }
     }
     
-    // MARK: - Step-by-step Methods
+    // MARK: - Fetch Methods
     
-    private func fetchMatchIds(userId: String) async throws -> [String] {
+    private func fetchJoinedMatchIds(userId: String) async throws -> [String] {
         let response = try await supabase
             .from("match_rsvps")
             .select("match_id")
             .eq("user_id", value: userId)
             .eq("rsvp_status", value: "going")
             .execute()
-
         
         let data: [[String: Any]] = try JSONSerialization.jsonObject(with: response.data) as? [[String: Any]] ?? []
         
@@ -81,37 +102,83 @@ class MatchDataService {
         return matchIds
     }
     
-    private func fetchMatchDetails(matchIds: [String]) async throws -> [DBMatch] {
+    private func fetchCreatedMatches(userId: String) async throws -> [DBMatch] {
+        // Get matches created by this user
+        let matchResponse = try await supabase
+            .from("matches")
+            .select()
+            .eq("posted_by_user_id", value: userId)
+            .execute()
+        
+        let matchData: [[String: Any]] = try JSONSerialization.jsonObject(with: matchResponse.data) as? [[String: Any]] ?? []
+        
+        print("🔍 [DEBUG] Found \(matchData.count) matches created by user")
+        
+        var matches: [DBMatch] = []
+        
+        for matchDict in matchData {
+            guard let matchRecord = createMatchRecord(from: matchDict) else {
+                print("❌ [DEBUG] Failed to create MatchRecord from dict")
+                continue
+            }
+            
+            // For created matches, the posted_by_name will be "You" or the user's name
+            let sportName = try await fetchSportName(sportId: matchRecord.sport_id)
+            
+            // For created matches, we can set postedByName to "You" or fetch the actual name
+            let postedByName = try await fetchUserName(userId: matchRecord.posted_by_user_id.uuidString)
+            
+            let rsvpCount = try await fetchRSVPCount(matchId: matchRecord.id.uuidString)
+            
+            if let dbMatch = DBMatch.fromMatchRecord(
+                matchRecord,
+                sportName: sportName,
+                postedByName: postedByName,
+                rsvpCount: rsvpCount,
+                isFriend: false,
+                isCreatedByUser: true // Add this parameter
+            ) {
+                matches.append(dbMatch)
+            } else {
+                print("❌ [DEBUG] Failed to create DBMatch for: \(matchRecord.venue)")
+            }
+        }
+        
+        return matches
+    }
+    
+    private func fetchMatchDetails(matchIds: [String], currentUserId: String) async throws -> [DBMatch] {
         // Get matches
         let matchResponse = try await supabase
             .from("matches")
             .select()
             .in("id", values: matchIds)
             .execute()
-
+        
         let matchData: [[String: Any]] = try JSONSerialization.jsonObject(with: matchResponse.data) as? [[String: Any]] ?? []
-
+        
         var matches: [DBMatch] = []
         
         for matchDict in matchData {
-
             guard let matchRecord = createMatchRecord(from: matchDict) else {
                 print("❌ [DEBUG] Failed to create MatchRecord from dict")
                 continue
             }
-
+            
             let sportName = try await fetchSportName(sportId: matchRecord.sport_id)
-
             let postedByName = try await fetchUserName(userId: matchRecord.posted_by_user_id.uuidString)
-
             let rsvpCount = try await fetchRSVPCount(matchId: matchRecord.id.uuidString)
-
+            
+            // Check if this match was created by the current user
+            let isCreatedByUser = (matchRecord.posted_by_user_id.uuidString == currentUserId)
+            
             if let dbMatch = DBMatch.fromMatchRecord(
                 matchRecord,
                 sportName: sportName,
                 postedByName: postedByName,
                 rsvpCount: rsvpCount,
-                isFriend: false
+                isFriend: false,
+                isCreatedByUser: isCreatedByUser
             ) {
                 matches.append(dbMatch)
             } else {
@@ -187,31 +254,32 @@ class MatchDataService {
     }
 }
 
-// MARK: - DBMatch Extension for Conversion (same as before)
+// MARK: - DBMatch Extension for Conversion
 extension DBMatch {
     static func fromMatchRecord(
         _ matchRecord: MatchRecord,
         sportName: String,
         postedByName: String,
         rsvpCount: Int,
-        isFriend: Bool
+        isFriend: Bool,
+        isCreatedByUser: Bool = false
     ) -> DBMatch? {
-        // Parse date
+        // Parse date - keep as is since date doesn't have timezone issues
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
         
         guard let matchDate = dateFormatter.date(from: matchRecord.match_date) else {
             print("❌ Failed to parse date: \(matchRecord.match_date)")
             return nil
         }
         
-        // Parse time
+        // FIX: Parse time WITHOUT forcing UTC timezone
+        // This will parse the time string in the system's local timezone
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm:ss"
         timeFormatter.locale = Locale(identifier: "en_US_POSIX")
-        timeFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // REMOVE the timeZone line - let it use the system's timezone
         
         guard let matchTime = timeFormatter.date(from: matchRecord.match_time) else {
             print("❌ Failed to parse time: \(matchRecord.match_time)")
@@ -220,7 +288,8 @@ extension DBMatch {
         
         // Parse created_at
         let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
         let createdAt = isoFormatter.date(from: matchRecord.created_at) ?? Date()
         
         return DBMatch(
@@ -237,8 +306,9 @@ extension DBMatch {
             postedByUserId: matchRecord.posted_by_user_id,
             createdAt: createdAt,
             playersRSVPed: rsvpCount,
-            postedByName: postedByName,
-            isFriend: isFriend
+            postedByName: isCreatedByUser ? "You" : postedByName,
+            isFriend: isFriend,
+            isCreatedByUser: isCreatedByUser
         )
     }
 }

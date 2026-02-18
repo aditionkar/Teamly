@@ -24,6 +24,7 @@ struct DBMatch {
     var playersRSVPed: Int
     let postedByName: String
     var isFriend: Bool
+    var isCreatedByUser: Bool? = false // Add this
     
     // Add this computed property
     var isNightTime: Bool {
@@ -91,7 +92,8 @@ struct DBMatch {
             createdAt: createdAt,
             playersRSVPed: dict["players_rsvped"] as? Int ?? 0,
             postedByName: dict["posted_by_name"] as? String ?? "Unknown",
-            isFriend: dict["is_friend"] as? Bool ?? false
+            isFriend: dict["is_friend"] as? Bool ?? false,
+            isCreatedByUser: dict["is_created_by_user"] as? Bool ?? false
         )
     }
 }

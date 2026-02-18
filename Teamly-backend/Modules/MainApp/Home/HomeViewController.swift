@@ -22,6 +22,10 @@ class HomeViewController: UIViewController {
     private var tableViewHeightConstraint: NSLayoutConstraint?
     private var contentViewBottomConstraint: NSLayoutConstraint?
     
+    private var reminderBannerTopConstraint: NSLayoutConstraint?
+    private var reminderBannerHeightConstraint: NSLayoutConstraint?
+    private var isReminderVisible: Bool = false
+    
     // MARK: - UI Components
     private let topGreenTint: UIView = {
         let view = UIView()
@@ -167,6 +171,48 @@ class HomeViewController: UIViewController {
         return label
     }()
     
+    private let reminderBanner: UIView = {
+        let view = UIView()
+        view.layer.cornerRadius = 28
+        view.layer.borderWidth = 1.5
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.clipsToBounds = false
+        
+//        // Subtle glow shadow
+//        view.layer.shadowColor = UIColor.red.cgColor
+//        view.layer.shadowOpacity = 0.25
+//        view.layer.shadowRadius = 10
+//        view.layer.shadowOffset = .zero
+        
+        return view
+    }()
+
+
+    private let reminderLabel: UILabel = {
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        label.numberOfLines = 0
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.lineBreakMode = .byWordWrapping
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return label
+    }()
+
+
+    private let reminderDismissButton: UIButton = {
+        let button = UIButton(type: .system)
+        
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        button.setImage(UIImage(systemName: "xmark", withConfiguration: config), for: .normal)
+        
+        button.layer.cornerRadius = 20
+        button.layer.borderWidth = 1
+        button.translatesAutoresizingMaskIntoConstraints = false
+        
+        return button
+    }()
+
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -174,6 +220,7 @@ class HomeViewController: UIViewController {
         setupCollectionView()
         setupTableView()
         setupActions()
+        setupReminderBanner()
         updateColors()
         fetchData()
     }
@@ -362,7 +409,41 @@ class HomeViewController: UIViewController {
         searchButton.addTarget(self, action: #selector(searchButtonTapped), for: .touchUpInside) // Add this line
     }
     
-    
+    private func setupReminderBanner() {
+        contentView.addSubview(reminderBanner)
+        reminderBanner.addSubview(reminderLabel)
+        reminderBanner.addSubview(reminderDismissButton)
+
+        // Constraints for the banner itself
+        reminderBannerTopConstraint = reminderBanner.topAnchor.constraint(
+            equalTo: searchButton.bottomAnchor, constant: 20
+        )
+        reminderBannerTopConstraint?.isActive = true
+
+        NSLayoutConstraint.activate([
+            
+            reminderBanner.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            reminderBanner.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+
+            reminderDismissButton.topAnchor.constraint(equalTo: reminderBanner.topAnchor, constant: 12),
+            reminderDismissButton.trailingAnchor.constraint(equalTo: reminderBanner.trailingAnchor, constant: -12),
+            reminderDismissButton.widthAnchor.constraint(equalToConstant: 40),
+            reminderDismissButton.heightAnchor.constraint(equalToConstant: 40),
+
+            reminderLabel.topAnchor.constraint(equalTo: reminderBanner.topAnchor, constant: 20),
+            reminderLabel.leadingAnchor.constraint(equalTo: reminderBanner.leadingAnchor, constant: 24),
+            reminderLabel.trailingAnchor.constraint(equalTo: reminderDismissButton.leadingAnchor, constant: -14),
+            reminderLabel.bottomAnchor.constraint(equalTo: reminderBanner.bottomAnchor, constant: -20),
+        ])
+
+
+        reminderDismissButton.addTarget(self, action: #selector(dismissReminderBanner), for: .touchUpInside)
+        updateReminderBannerColors()
+
+        // Hide until showReminderBanner() is called
+        reminderBanner.isHidden = true
+    }
+
     
     // MARK: - Data Fetching
     private func fetchData() {
@@ -452,6 +533,7 @@ class HomeViewController: UIViewController {
                         
                         self.loadingIndicator.stopAnimating()
                         self.contentView.isHidden = false
+                        self.showReminderBanner(message: "Reminder - Game on! Your match starts at 6:00 PM, only 2 hours to go.")
                     }
                 }
                 
@@ -697,6 +779,52 @@ class HomeViewController: UIViewController {
         }
     }
     
+    func showReminderBanner(message: String) {
+        reminderLabel.text = message
+        reminderBanner.isHidden = false
+        isReminderVisible = true
+        updateSportsCollectionViewTopConstraint()
+
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    @objc private func dismissReminderBanner() {
+        isReminderVisible = false
+        UIView.animate(withDuration: 0.25, animations: {
+            self.reminderBanner.alpha = 0
+            self.view.layoutIfNeeded()
+        }) { _ in
+            self.reminderBanner.isHidden = true
+            self.reminderBanner.alpha = 1
+            self.updateSportsCollectionViewTopConstraint()
+            UIView.animate(withDuration: 0.2) {
+                self.view.layoutIfNeeded()
+            }
+        }
+    }
+
+    /// Re-anchors the sports collection view depending on banner visibility
+    private func updateSportsCollectionViewTopConstraint() {
+        // Remove all existing top constraints on sportsCollectionView
+        contentView.constraints.forEach { constraint in
+            if constraint.firstItem === sportsCollectionView && constraint.firstAttribute == .top {
+                constraint.isActive = false
+            }
+        }
+
+        if isReminderVisible {
+            sportsCollectionView.topAnchor.constraint(
+                equalTo: reminderBanner.bottomAnchor, constant: 12
+            ).isActive = true
+        } else {
+            sportsCollectionView.topAnchor.constraint(
+                equalTo: searchButton.bottomAnchor, constant: 20
+            ).isActive = true
+        }
+    }
+    
     // MARK: - Navigation Methods
     private func navigateToMatchesViewController(with sportName: String) {
         let matchesVC = MatchesViewController()
@@ -745,7 +873,77 @@ class HomeViewController: UIViewController {
         noMatchesLabel.textColor = isDarkMode ? .gray : .darkGray
         
         updateSearchButtonAppearance()
+        updateReminderBannerColors()
     }
+    
+    private func updateReminderBannerColors() {
+
+        let isDarkMode = traitCollection.userInterfaceStyle == .dark
+
+        if isDarkMode {
+            
+            // Deep wine red background
+            reminderBanner.backgroundColor = UIColor(
+                red: 0.38,
+                green: 0.06,
+                blue: 0.10,
+                alpha: 1.0
+            )
+            
+            // Neon red border
+            reminderBanner.layer.borderColor = UIColor(
+                red: 1.0,
+                green: 0.15,
+                blue: 0.30,
+                alpha: 1.0
+            ).cgColor
+            
+            reminderLabel.textColor = UIColor.white.withAlphaComponent(0.95)
+            
+            reminderDismissButton.tintColor = .white
+            reminderDismissButton.backgroundColor = UIColor.black.withAlphaComponent(0.3)
+            reminderDismissButton.layer.borderColor = UIColor.white.withAlphaComponent(0.4).cgColor
+            
+        } else {
+            
+            reminderBanner.backgroundColor = UIColor(
+                red: 1.0,
+                green: 0.93,
+                blue: 0.95,
+                alpha: 1.0
+            )
+            
+            reminderBanner.layer.borderColor = UIColor(
+                red: 0.85,
+                green: 0.25,
+                blue: 0.35,
+                alpha: 0.6
+            ).cgColor
+            
+            reminderLabel.textColor = UIColor(
+                red: 0.55,
+                green: 0.05,
+                blue: 0.10,
+                alpha: 1.0
+            )
+            
+            reminderDismissButton.tintColor = UIColor(
+                red: 0.55,
+                green: 0.05,
+                blue: 0.10,
+                alpha: 1.0
+            )
+            
+            reminderDismissButton.backgroundColor = UIColor.white
+            reminderDismissButton.layer.borderColor = UIColor(
+                red: 0.55,
+                green: 0.05,
+                blue: 0.10,
+                alpha: 0.3
+            ).cgColor
+        }
+    }
+
     
     private func updateGradientColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark

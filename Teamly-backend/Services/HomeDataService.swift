@@ -125,6 +125,7 @@ class HomeDataService {
         return try decoder.decode(SportCommunity.self, from: response.data)
     }
     
+
     func fetchMatchesForSport(sportId: Int, collegeId: Int, currentUserId: String) async throws -> [DBMatch] {
         // Get current date and tomorrow's date
         let dateFormatter = DateFormatter()
@@ -142,12 +143,14 @@ class HomeDataService {
         
         // Fetch matches for this sport community with match_type = 'sport_community'
         // and match_date is today or tomorrow
+        // EXCLUDE matches created by the current user
         let response = try await SupabaseManager.shared.client
             .from("matches")
             .select("*")
             .eq("match_type", value: "sport_community")
             .eq("community_id", value: community.id)
             .in("match_date", values: [today, tomorrow])
+            .neq("posted_by_user_id", value: currentUserId) // EXCLUDE matches created by current user
             .order("match_date", ascending: true)
             .order("match_time", ascending: true)
             .execute()
@@ -220,6 +223,8 @@ class HomeDataService {
         
         return dbMatches
     }
+    
+    
     private func fetchUserNames(for userIds: [String]) async -> [String: String] {
         guard !userIds.isEmpty else { return [:] }
         
