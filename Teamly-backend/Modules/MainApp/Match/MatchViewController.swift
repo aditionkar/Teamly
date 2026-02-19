@@ -5,7 +5,7 @@
 //  Created by user@37 on 27/01/26.
 //
 
-import UIKit
+import UIKit  //(Swipe down and refresh added)
 
 class MatchViewController: UIViewController {
     
@@ -14,6 +14,9 @@ class MatchViewController: UIViewController {
     private var upcomingMatches: [DBMatch] = []
     private var pastMatches: [DBMatch] = []
     private var currentMatches: [DBMatch] = []
+    
+    // Add a refresh control
+    private let refreshControl = UIRefreshControl()
     
     // MARK: - UI Components
     
@@ -66,6 +69,9 @@ class MatchViewController: UIViewController {
 
         cv.dataSource = self
         cv.delegate = self
+        
+        // Add refresh control to collection view
+        cv.refreshControl = refreshControl
 
         return cv
     }()
@@ -95,12 +101,16 @@ class MatchViewController: UIViewController {
 
         setupUI()
         updateColors()
+        setupRefreshControl()
         fetchUserMatches()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
+        
+        // Refresh data when returning to this screen
+        fetchUserMatches()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -119,6 +129,7 @@ class MatchViewController: UIViewController {
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
             updateColors()
             updateGradientColors()
+            collectionView.reloadData()
         }
     }
 
@@ -161,17 +172,26 @@ class MatchViewController: UIViewController {
         ])
     }
     
+    private func setupRefreshControl() {
+        refreshControl.tintColor = traitCollection.userInterfaceStyle == .dark ? .white : .gray
+        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+    }
+    
     // MARK: - Data Fetching
     private func fetchUserMatches() {
-        activityIndicator.startAnimating()
+        // Only show activity indicator if not refreshing and no data
+        if upcomingMatches.isEmpty && pastMatches.isEmpty {
+            activityIndicator.startAnimating()
+        }
+        
         emptyStateLabel.isHidden = true
-        collectionView.isHidden = true
         
         MatchDataService.shared.fetchUserMatches { [weak self] result in
             guard let self = self else { return }
             
             DispatchQueue.main.async {
                 self.activityIndicator.stopAnimating()
+                self.refreshControl.endRefreshing()
                 
                 switch result {
                 case .success(let matches):
@@ -294,6 +314,7 @@ class MatchViewController: UIViewController {
         segmentControl.setTitleTextAttributes(selectedAttributes, for: .selected)
         
         activityIndicator.color = isDarkMode ? .white : .gray
+        refreshControl.tintColor = isDarkMode ? .white : .gray
     }
     
     private func updateGradientColors() {
@@ -327,6 +348,11 @@ class MatchViewController: UIViewController {
 
         UIView.transition(with: collectionView, duration: 0.3, options: .transitionCrossDissolve) {
             self.collectionView.reloadData()
+        }
+        
+        // Optional: Refresh data when switching segments if the current segment is empty
+        if currentMatches.isEmpty {
+            fetchUserMatches()
         }
     }
 
@@ -398,6 +424,13 @@ extension MatchViewController: UICollectionViewDataSource, UICollectionViewDeleg
             navController.modalPresentationStyle = .fullScreen
             navController.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
             present(navController, animated: true)
+        }
+    }
+    
+    // MARK: - UIScrollViewDelegate (for refresh control)
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if refreshControl.isRefreshing {
+            refreshData()
         }
     }
 }

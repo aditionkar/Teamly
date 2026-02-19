@@ -65,6 +65,264 @@ class HomeDataService {
         let name: String?
     }
     
+    // Add to HomeDataService.swift
+
+    struct UpcomingMatch: Codable {
+        let id: UUID
+        let match_type: String
+        let community_id: String?
+        let venue: String
+        let match_date: String
+        let match_time: String
+        let sport_id: Int
+        let sport_name: String?
+        let skill_level: String?
+        let players_needed: Int
+        let posted_by_user_id: UUID
+        let created_at: String
+    }
+
+    func fetchUserUpcomingMatches(userId: String) async throws -> [DBMatch] {
+        print("🔍 Fetching upcoming matches for user: \(userId)")
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let today = dateFormatter.string(from: Date())
+        
+        let calendar = Calendar.current
+        let tomorrowDate = calendar.date(byAdding: .day, value: 1, to: Date())!
+        let tomorrow = dateFormatter.string(from: tomorrowDate)
+        
+        print("📅 Today: \(today), Tomorrow: \(tomorrow)")
+        
+        // Step 1: Fetch matches created by the user
+        print("📋 Fetching matches created by user...")
+        let createdMatchesResponse = try await SupabaseManager.shared.client
+            .from("matches")
+            .select("*, sports!inner(name)")
+            .eq("posted_by_user_id", value: userId)
+            .in("match_date", values: [today, tomorrow])
+            .order("match_date", ascending: true)
+            .order("match_time", ascending: true)
+            .execute()
+        
+        // Print raw response for debugging
+        if let jsonString = String(data: createdMatchesResponse.data, encoding: .utf8) {
+            print("📊 Raw created matches response: \(jsonString)")
+        }
+        
+        // Step 2: Fetch matches the user has RSVP'd to
+        print("📋 Fetching matches user RSVP'd to...")
+        let rsvpMatchesResponse = try await SupabaseManager.shared.client
+            .from("match_rsvps")
+            .select("""
+                match_id,
+                matches!inner(*, sports!inner(name))
+            """)
+            .eq("user_id", value: userId)
+            .eq("rsvp_status", value: "going")
+            .execute()
+        
+        // Print raw response for debugging
+        if let jsonString = String(data: rsvpMatchesResponse.data, encoding: .utf8) {
+            print("📊 Raw RSVP matches response: \(jsonString)")
+        }
+        
+        var allMatches: [DBMatch] = []
+        
+        // Parse created matches
+        do {
+            if let jsonArray = try JSONSerialization.jsonObject(with: createdMatchesResponse.data) as? [[String: Any]] {
+                print("📊 Created matches count: \(jsonArray.count)")
+                
+                for (index, matchData) in jsonArray.enumerated() {
+                    print("🔍 Processing created match \(index + 1)")
+                    if let match = parseMatchData(matchData) {
+                        allMatches.append(match)
+                        print("✅ Successfully parsed created match: \(match.sportName) at \(match.matchTime)")
+                    } else {
+                        print("❌ Failed to parse created match \(index + 1)")
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error parsing created matches JSON: \(error)")
+        }
+        
+        // Parse RSVP matches
+        do {
+            if let jsonArray = try JSONSerialization.jsonObject(with: rsvpMatchesResponse.data) as? [[String: Any]] {
+                print("📊 RSVP matches count: \(jsonArray.count)")
+                
+                for (index, item) in jsonArray.enumerated() {
+                    print("🔍 Processing RSVP match \(index + 1)")
+                    if let matchData = item["matches"] as? [String: Any] {
+                        if let match = parseMatchData(matchData) {
+                            if !allMatches.contains(where: { $0.id == match.id }) {
+                                allMatches.append(match)
+                                print("✅ Successfully parsed RSVP match: \(match.sportName) at \(match.matchTime)")
+                            } else {
+                                print("⚠️ Duplicate match skipped: \(match.id)")
+                            }
+                        } else {
+                            print("❌ Failed to parse RSVP match \(index + 1)")
+                        }
+                    } else {
+                        print("❌ No matches data in RSVP item \(index + 1)")
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error parsing RSVP matches JSON: \(error)")
+        }
+        
+        print("📊 Total matches before filtering: \(allMatches.count)")
+        
+        // Filter matches that are starting within the next 3 hours
+        let now = Date()
+        let upcomingMatches = allMatches.filter { match in
+            // Create a date object for the match (combining date and time)
+            var matchDateComponents = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+            let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+            
+            matchDateComponents.hour = timeComponents.hour
+            matchDateComponents.minute = timeComponents.minute
+            matchDateComponents.second = timeComponents.second
+            
+            guard let matchDateTime = calendar.date(from: matchDateComponents) else {
+                print("❌ Failed to create match date time for match: \(match.id)")
+                return false
+            }
+            
+            // Calculate time difference in minutes
+            let timeDifference = calendar.dateComponents([.minute], from: now, to: matchDateTime)
+            
+            guard let minutesUntilMatch = timeDifference.minute else {
+                return false
+            }
+            
+            print("⏰ Match \(match.sportName) at \(matchDateTime) - minutes until: \(minutesUntilMatch)")
+            
+            // Check if match is today and within 3 hours
+            let isToday = calendar.isDate(match.matchDate, inSameDayAs: now)
+            let isUpcoming = isToday && minutesUntilMatch > 0 && minutesUntilMatch <= 180
+            
+            if isUpcoming {
+                print("✅ Match is upcoming: \(minutesUntilMatch) minutes until start")
+            }
+            
+            return isUpcoming
+        }
+        
+        print("🎯 Upcoming matches after filtering: \(upcomingMatches.count)")
+        
+        // Sort by closest match first
+        return upcomingMatches.sorted { match1, match2 in
+            let date1 = createDateTime(from: match1)
+            let date2 = createDateTime(from: match2)
+            return date1 < date2
+        }
+    }
+
+    // Helper method to create full datetime from match
+    private func createDateTime(from match: DBMatch) -> Date {
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+        
+        components.hour = timeComponents.hour
+        components.minute = timeComponents.minute
+        components.second = timeComponents.second
+        
+        return calendar.date(from: components) ?? match.matchDate
+    }
+
+    private func parseMatchData(_ matchData: [String: Any]) -> DBMatch? {
+        guard let idString = matchData["id"] as? String,
+              let id = UUID(uuidString: idString),
+              let matchType = matchData["match_type"] as? String,
+              let venue = matchData["venue"] as? String,
+              let matchDateString = matchData["match_date"] as? String,
+              let matchTimeString = matchData["match_time"] as? String,
+              let sportId = matchData["sport_id"] as? Int,
+              let playersNeeded = matchData["players_needed"] as? Int,
+              let postedByUserIdString = matchData["posted_by_user_id"] as? String,
+              let postedByUserId = UUID(uuidString: postedByUserIdString) else {
+            print("❌ Failed to parse basic match data")
+            return nil
+        }
+        
+        // Parse sport name from joined sports data
+        var sportName = "Unknown Sport"
+        if let sportsData = matchData["sports"] as? [String: Any],
+           let name = sportsData["name"] as? String {
+            sportName = name
+        } else if let sportNameStr = matchData["sport_name"] as? String {
+            sportName = sportNameStr
+        }
+        
+        let communityId = matchData["community_id"] as? String
+        let skillLevel = matchData["skill_level"] as? String
+        
+        // Parse dates
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        guard let matchDate = dateFormatter.date(from: matchDateString) else {
+            print("❌ Failed to parse match date: \(matchDateString)")
+            return nil
+        }
+        
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+        guard let matchTime = timeFormatter.date(from: matchTimeString) else {
+            print("❌ Failed to parse match time: \(matchTimeString)")
+            return nil
+        }
+        
+        // Handle created_at which might be in a different format
+        var createdAt = Date()
+        if let createdAtString = matchData["created_at"] as? String {
+            // Try multiple date formats
+            let dateFormats = [
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",  // Format with microseconds: 2026-02-05T08:34:12.629392
+                "yyyy-MM-dd'T'HH:mm:ss.SSS",      // Format with milliseconds
+                "yyyy-MM-dd HH:mm:ss",             // Simple format
+                "yyyy-MM-dd'T'HH:mm:ss"            // ISO format without milliseconds
+            ]
+            
+            let isoFormatter = DateFormatter()
+            isoFormatter.locale = Locale(identifier: "en_US_POSIX")
+            isoFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+            
+            for format in dateFormats {
+                isoFormatter.dateFormat = format
+                if let date = isoFormatter.date(from: createdAtString) {
+                    createdAt = date
+                    break
+                }
+            }
+        }
+        
+        // Create match with default values
+        return DBMatch(
+            id: id,
+            matchType: matchType,
+            communityId: communityId,
+            venue: venue,
+            matchDate: matchDate,
+            matchTime: matchTime,
+            sportId: sportId,
+            sportName: sportName,
+            skillLevel: skillLevel,
+            playersNeeded: playersNeeded,
+            postedByUserId: postedByUserId,
+            createdAt: createdAt,
+            playersRSVPed: 0,
+            postedByName: "",
+            isFriend: false
+        )
+    }
+    
     // MARK: - Fetch Methods
     
     func fetchUserProfile(userId: String) async throws -> UserProfile? {

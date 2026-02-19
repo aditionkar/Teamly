@@ -26,6 +26,9 @@ class HomeViewController: UIViewController {
     private var reminderBannerHeightConstraint: NSLayoutConstraint?
     private var isReminderVisible: Bool = false
     
+    private var titleTopConstraint: NSLayoutConstraint?
+    private var hasSetTitleTopInset: Bool = false
+    
     // MARK: - UI Components
     private let topGreenTint: UIView = {
         let view = UIView()
@@ -147,7 +150,7 @@ class HomeViewController: UIViewController {
         tableView.backgroundColor = .clear
         tableView.separatorStyle = .none
         tableView.showsVerticalScrollIndicator = false
-        tableView.isScrollEnabled = false // Since it's inside a scroll view
+        //tableView.isScrollEnabled = false // Since it's inside a scroll view
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.rowHeight = 190
         return tableView
@@ -202,10 +205,10 @@ class HomeViewController: UIViewController {
     private let reminderDismissButton: UIButton = {
         let button = UIButton(type: .system)
         
-        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        let config = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
         button.setImage(UIImage(systemName: "xmark", withConfiguration: config), for: .normal)
         
-        button.layer.cornerRadius = 20
+        button.layer.cornerRadius = 15
         button.layer.borderWidth = 1
         button.translatesAutoresizingMaskIntoConstraints = false
         
@@ -298,7 +301,7 @@ class HomeViewController: UIViewController {
             topGreenTint.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -300),
             
             // Scroll View
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -311,7 +314,6 @@ class HomeViewController: UIViewController {
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
             
             // Title Label
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20 + view.safeAreaInsets.top),
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: topRightContainer.leadingAnchor, constant: -12),
             
@@ -388,8 +390,11 @@ class HomeViewController: UIViewController {
         // Create initial tableView height constraint
         tableViewHeightConstraint = matchesTableView.heightAnchor.constraint(equalToConstant: 0)
         tableViewHeightConstraint?.isActive = true
+        let titleTop = titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20)
+        titleTop.isActive = true
+        titleTopConstraint = titleTop
     }
-    
+
     private func setupCollectionView() {
         sportsCollectionView.delegate = self
         sportsCollectionView.dataSource = self
@@ -427,8 +432,8 @@ class HomeViewController: UIViewController {
 
             reminderDismissButton.topAnchor.constraint(equalTo: reminderBanner.topAnchor, constant: 12),
             reminderDismissButton.trailingAnchor.constraint(equalTo: reminderBanner.trailingAnchor, constant: -12),
-            reminderDismissButton.widthAnchor.constraint(equalToConstant: 40),
-            reminderDismissButton.heightAnchor.constraint(equalToConstant: 40),
+            reminderDismissButton.widthAnchor.constraint(equalToConstant: 30),
+            reminderDismissButton.heightAnchor.constraint(equalToConstant: 30),
 
             reminderLabel.topAnchor.constraint(equalTo: reminderBanner.topAnchor, constant: 20),
             reminderLabel.leadingAnchor.constraint(equalTo: reminderBanner.leadingAnchor, constant: 24),
@@ -449,7 +454,6 @@ class HomeViewController: UIViewController {
     private func fetchData() {
         Task {
             do {
-                
                 // 1. Get current user ID from auth
                 let session = try await SupabaseManager.shared.client.auth.session
                 currentUserId = session.user.id.uuidString
@@ -516,15 +520,15 @@ class HomeViewController: UIViewController {
                     )
                     
                     preferredSportsMatches[sport.name] = dbMatches
-
+                    
                     await MainActor.run {
                         self.sports = sortedSports
                         self.sportsCollectionView.reloadData()
-
+                        
                         self.seeMoreButton.tag = sport.id
-
+                        
                         self.updatePreferredSportsSection(for: sport)
-
+                        
                         if let index = self.sports.firstIndex(where: { $0.id == sport.id }) {
                             self.selectedSportIndex = index
                             let indexPath = IndexPath(item: index, section: 0)
@@ -533,7 +537,9 @@ class HomeViewController: UIViewController {
                         
                         self.loadingIndicator.stopAnimating()
                         self.contentView.isHidden = false
-                        self.showReminderBanner(message: "Reminder - Game on! Your match starts at 6:00 PM, only 2 hours to go.")
+                        
+                        // Check for upcoming matches and show reminder if needed
+                        self.checkForUpcomingMatches()
                     }
                 }
                 
@@ -547,6 +553,84 @@ class HomeViewController: UIViewController {
         }
     }
     
+    private func checkForUpcomingMatches() {
+        print("🔍 Checking for upcoming matches...")
+        
+        Task {
+            do {
+                // Fetch upcoming matches (within 3 hours) that user created or RSVP'd to
+                let upcomingMatches = try await dataService.fetchUserUpcomingMatches(userId: currentUserId)
+                
+                print("📊 Found \(upcomingMatches.count) upcoming matches")
+                
+                await MainActor.run {
+                    if let closestMatch = upcomingMatches.first {
+                        print("✅ Showing reminder for match: \(closestMatch.sportName) at \(closestMatch.matchTime)")
+                        showReminderForMatch(closestMatch)
+                    } else {
+                        print("ℹ️ No upcoming matches found")
+                        // Hide banner if it's showing
+                        if !self.reminderBanner.isHidden {
+                            self.dismissReminderBanner()
+                        }
+                    }
+                }
+            } catch {
+                print("❌ Error fetching upcoming matches: \(error)")
+            }
+        }
+    }
+
+    private func showReminderForMatch(_ match: DBMatch) {
+        // Calculate time until match
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // Create full datetime for the match
+        var matchDateComponents = calendar.dateComponents([.year, .month, .day], from: match.matchDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: match.matchTime)
+        
+        matchDateComponents.hour = timeComponents.hour
+        matchDateComponents.minute = timeComponents.minute
+        matchDateComponents.second = timeComponents.second
+        
+        guard let matchDateTime = calendar.date(from: matchDateComponents) else {
+            print("❌ Failed to create match datetime")
+            return
+        }
+        
+        // Calculate time difference
+        let components = calendar.dateComponents([.hour, .minute], from: now, to: matchDateTime)
+        let hoursUntilMatch = components.hour ?? 0
+        let minutesUntilMatch = components.minute ?? 0
+        
+        print("⏰ Time until match: \(hoursUntilMatch) hours, \(minutesUntilMatch) minutes")
+        
+        // Format match time for display
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h:mm a"
+        let matchTimeString = timeFormatter.string(from: match.matchTime)
+        
+        // Create the reminder message
+        var message = ""
+        
+        if hoursUntilMatch == 0 {
+            if minutesUntilMatch <= 5 {
+                message = "Reminder - Starting now! Your \(match.sportName) match at \(matchTimeString) is about to begin!"
+            } else {
+                message = "Reminder - Game on! Your \(match.sportName) match starts at \(matchTimeString), only \(minutesUntilMatch) minutes to go."
+            }
+        } else if hoursUntilMatch == 1 {
+            message = "Reminder - Game on! Your \(match.sportName) match starts at \(matchTimeString), only 1 hour and \(minutesUntilMatch) minutes to go."
+        } else {
+            message = "Reminder - Game on! Your \(match.sportName) match starts at \(matchTimeString), only \(hoursUntilMatch) hours and \(minutesUntilMatch) minutes to go."
+        }
+        
+        showReminderBanner(message: message)
+    }
+
+
+    
     private func updatePreferredSportsSection(for sport: HomeDataService.Sport) {
         preferredSportsEmojiLabel.text = sport.emoji
         preferredSportsTitleLabel.text = "\(sport.name)"
@@ -554,23 +638,56 @@ class HomeViewController: UIViewController {
         
         let matches = preferredSportsMatches[sport.name] ?? []
         
-        // IMPORTANT: Make sure matches are updated with current RSVP counts
         Task {
             await updateMatchesWithCurrentRSVPCounts(for: matches, sportName: sport.name)
         }
         
-        // Update table view
         matchesTableView.reloadData()
-        
-        // Show/hide no matches label
         noMatchesLabel.isHidden = !matches.isEmpty
         
-        // Update table view height based on number of matches
-        let tableViewHeight = CGFloat(matches.count) * 190
-        tableViewHeightConstraint?.constant = tableViewHeight
+        let scrollThreshold = isReminderVisible ? 2 : 3
+        let shouldScroll = matches.count >= scrollThreshold
         
-        // Update constraints based on matches availability
+        matchesTableView.isScrollEnabled = shouldScroll
+        
+        if shouldScroll {
+            // Calculate available space from tableView's top to where the tab bar starts
+            let tabBarHeight = tabBarController?.tabBar.frame.height ?? 83
+            let tableViewOriginY = calculateTableViewOriginY()
+            let availableHeight = view.frame.height - tableViewOriginY - tabBarHeight
+            
+            tableViewHeightConstraint?.constant = max(availableHeight, 190)
+        } else {
+            tableViewHeightConstraint?.constant = CGFloat(matches.count) * 190
+        }
+        
         updateConstraintsBasedOnMatches(matches)
+    }
+
+    private func calculateTableViewOriginY() -> CGFloat {
+        // Walk up the view hierarchy to get the tableView's Y position in screen coordinates
+        let tableViewFrameInWindow = matchesTableView.convert(matchesTableView.bounds, to: view)
+        
+        // If layout hasn't happened yet, estimate based on known component heights
+        if tableViewFrameInWindow.origin.y == 0 {
+            let safeAreaTop = view.safeAreaInsets.top
+            let titleHeight: CGFloat = 42      // title label
+            let titleTopPadding: CGFloat = 20
+            let searchBarHeight: CGFloat = 45
+            let searchBarTopPadding: CGFloat = 20
+            let reminderHeight: CGFloat = isReminderVisible ? (reminderBanner.frame.height > 0 ? reminderBanner.frame.height + 12 : 100) : 0
+            let sportsCollectionHeight: CGFloat = 100
+            let sportsCollectionTopPadding: CGFloat = 20
+            let preferredSportsHeaderHeight: CGFloat = 30
+            let headerTopPadding: CGFloat = 10
+            let tableViewTopPadding: CGFloat = 10
+            
+            return safeAreaTop + titleTopPadding + titleHeight + searchBarTopPadding + searchBarHeight
+                + reminderHeight + sportsCollectionTopPadding + sportsCollectionHeight
+                + headerTopPadding + preferredSportsHeaderHeight + tableViewTopPadding
+        }
+        
+        return tableViewFrameInWindow.origin.y
     }
     
     private func updateMatchesWithCurrentRSVPCounts(for matches: [DBMatch], sportName: String) async {
@@ -691,6 +808,10 @@ class HomeViewController: UIViewController {
         
         // Force layout update
         view.layoutIfNeeded()
+        scrollView.contentSize = CGSize(
+            width: scrollView.frame.width,
+            height: contentView.frame.height
+        )
     }
     
     // MARK: - Refresh Methods
@@ -699,6 +820,7 @@ class HomeViewController: UIViewController {
         
         Task {
             await refreshMatchesForCurrentSport()
+            checkForUpcomingMatches() // Check for reminders on refresh
         }
     }
 
@@ -780,13 +902,15 @@ class HomeViewController: UIViewController {
     }
     
     func showReminderBanner(message: String) {
-        reminderLabel.text = message
-        reminderBanner.isHidden = false
-        isReminderVisible = true
-        updateSportsCollectionViewTopConstraint()
-
-        UIView.animate(withDuration: 0.3) {
-            self.view.layoutIfNeeded()
+        DispatchQueue.main.async {
+            self.reminderLabel.text = message
+            self.reminderBanner.isHidden = false
+            self.isReminderVisible = true
+            self.updateSportsCollectionViewTopConstraint()
+            
+            UIView.animate(withDuration: 0.3) {
+                self.view.layoutIfNeeded()
+            }
         }
     }
 
@@ -799,6 +923,13 @@ class HomeViewController: UIViewController {
             self.reminderBanner.isHidden = true
             self.reminderBanner.alpha = 1
             self.updateSportsCollectionViewTopConstraint()
+            
+            // Recalculate scroll threshold now that reminder is gone
+            let currentSportId = self.seeMoreButton.tag
+            if let sport = self.sports.first(where: { $0.id == currentSportId }) {
+                self.updatePreferredSportsSection(for: sport)
+            }
+            
             UIView.animate(withDuration: 0.2) {
                 self.view.layoutIfNeeded()
             }

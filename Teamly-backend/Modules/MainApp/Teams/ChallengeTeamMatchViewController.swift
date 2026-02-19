@@ -11,6 +11,7 @@ class ChallengeTeamMatchViewController: UIViewController {
     
     // MARK: - Properties
     private var selectedTeam: TeamChallenge?
+    private var selectedTeamIndex: Int? // Add this to track which team is selected
     private var challengeTeams: [TeamChallenge] = []
     private let dataService = ChallengeMatchDataService.shared
     
@@ -244,6 +245,17 @@ class ChallengeTeamMatchViewController: UIViewController {
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
     }()
+
+    private let noTeamsLabel: UILabel = {
+        let label = UILabel()
+        label.text = "No teams available"
+        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        label.textAlignment = .center
+        label.textColor = .systemGray
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isHidden = true
+        return label
+    }()
     
     private var containerViewHeightConstraint: NSLayoutConstraint!
     private var teamListHeightConstraint: NSLayoutConstraint!
@@ -316,6 +328,7 @@ class ChallengeTeamMatchViewController: UIViewController {
         
         // Add team list container
         teamListContainer.addSubview(tableView)
+        teamListContainer.addSubview(noTeamsLabel)
         contentStackView.addArrangedSubview(challengeButtonContainer)
         contentStackView.insertArrangedSubview(teamListContainer, at: contentStackView.arrangedSubviews.count - 2)
         
@@ -510,6 +523,33 @@ class ChallengeTeamMatchViewController: UIViewController {
                 await MainActor.run {
                     availableTeamNames = challengeTeams.map { $0.name }
                     tableView.reloadData()
+                    
+                    // Reset selection
+                    selectedTeam = nil
+                    selectedTeamIndex = nil
+                    
+                    // Handle empty state
+                    if challengeTeams.isEmpty {
+                        // Show empty state in team list container
+                        showNoTeamsAvailable()
+                        
+                        // Update button text to indicate no teams available
+                        challengeTeamButton.setTitle("No teams available", for: .normal)
+                        challengeTeamButton.isEnabled = false
+                        dropdownIcon.isHidden = true
+                    } else {
+                        // Hide empty state label if it exists
+                        hideNoTeamsAvailable()
+                        
+                        challengeTeamButton.setTitle("Challenge team", for: .normal)
+                        challengeTeamButton.isEnabled = true
+                        dropdownIcon.isHidden = false
+                    }
+                    
+                    // Recalculate container height if expanded
+                    if isTeamListExpanded {
+                        updateTeamListHeight()
+                    }
                 }
             } catch {
                 print("❌ Failed to load challenge teams: \(error)")
@@ -518,6 +558,42 @@ class ChallengeTeamMatchViewController: UIViewController {
                 }
             }
         }
+    }
+    
+    private func updateTeamListHeight() {
+        if challengeTeams.isEmpty {
+            // Show minimal height for empty state
+            teamListHeightConstraint.constant = 100
+        } else {
+            // Calculate height based on number of teams
+            let cellHeight: CGFloat = 70
+            let spacing: CGFloat = 6
+            let topPadding: CGFloat = 16
+            let bottomPadding: CGFloat = 16
+            let totalHeight = topPadding + (cellHeight + spacing) * CGFloat(challengeTeams.count) - spacing + bottomPadding
+            teamListHeightConstraint.constant = totalHeight
+        }
+    }
+    
+    private func showNoTeamsAvailable() {
+        // Remove any existing empty state label first
+        hideNoTeamsAvailable()
+        
+        // Add the label to teamListContainer
+        teamListContainer.addSubview(noTeamsLabel)
+        noTeamsLabel.isHidden = false
+        
+        NSLayoutConstraint.activate([
+            noTeamsLabel.centerXAnchor.constraint(equalTo: teamListContainer.centerXAnchor),
+            noTeamsLabel.centerYAnchor.constraint(equalTo: teamListContainer.centerYAnchor),
+            noTeamsLabel.leadingAnchor.constraint(equalTo: teamListContainer.leadingAnchor, constant: 20),
+            noTeamsLabel.trailingAnchor.constraint(equalTo: teamListContainer.trailingAnchor, constant: -20)
+        ])
+    }
+
+    private func hideNoTeamsAvailable() {
+        noTeamsLabel.removeFromSuperview()
+        noTeamsLabel.isHidden = true
     }
     
     private func setupActions() {
@@ -662,12 +738,32 @@ class ChallengeTeamMatchViewController: UIViewController {
             dropdownIcon.transform = .identity
         }
         
-        // Update button title if hidden
-        if isHidden {
-            challengeTeamButton.setTitle("Challenge team", for: .normal)
-            let isDarkMode = traitCollection.userInterfaceStyle == .dark
-            challengeTeamButton.setTitleColor(isDarkMode ? .systemGray2 : .darkGray, for: .normal)
+        // Update button state based on available teams
+        if !isHidden {
+            if challengeTeams.isEmpty {
+                challengeTeamButton.setTitle("No teams available", for: .normal)
+                challengeTeamButton.isEnabled = false
+                dropdownIcon.isHidden = true
+            } else {
+                // Show either "Challenge team" or the selected team name
+                if let selectedTeam = selectedTeam {
+                    challengeTeamButton.setTitle(selectedTeam.name, for: .normal)
+                } else {
+                    challengeTeamButton.setTitle("Challenge team", for: .normal)
+                }
+                challengeTeamButton.isEnabled = true
+                dropdownIcon.isHidden = false
+            }
         }
+        
+        // Update button title color
+        let isDarkMode = traitCollection.userInterfaceStyle == .dark
+        challengeTeamButton.setTitleColor(
+            challengeTeamButton.isEnabled ?
+                (isDarkMode ? .primaryWhite : .primaryBlack) :
+                .systemGray,
+            for: .normal
+        )
         
         UIView.animate(withDuration: 0.3) {
             self.view.layoutIfNeeded()
@@ -853,17 +949,17 @@ class ChallengeTeamMatchViewController: UIViewController {
     
     // MARK: - Actions
     @objc private func toggleTeamList() {
+        // Don't allow expansion if there are no teams
+        if challengeTeams.isEmpty {
+            return
+        }
+        
         isTeamListExpanded.toggle()
         
         UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseInOut) {
             if self.isTeamListExpanded {
                 self.teamListContainer.isHidden = false
-                let cellHeight: CGFloat = 70
-                let spacing: CGFloat = 6 // Reduced spacing
-                let topPadding: CGFloat = 16 // Reduced top padding
-                let bottomPadding: CGFloat = 16
-                let totalHeight = topPadding + (cellHeight + spacing) * CGFloat(self.availableTeamNames.count) - spacing + bottomPadding
-                self.teamListHeightConstraint.constant = totalHeight
+                self.updateTeamListHeight()
                 self.challengeTeamButton.isHidden = true
             } else {
                 self.teamListHeightConstraint.constant = 0
@@ -877,6 +973,20 @@ class ChallengeTeamMatchViewController: UIViewController {
     }
     
     @objc private func challengeModeSwitchChanged() {
+        // Reset selection when toggling challenge mode
+        if challengeModeSwitch.isOn {
+            // When turning on, reset selection
+            selectedTeam = nil
+            selectedTeamIndex = nil
+            
+            // Reset all cells if they exist
+            for i in 0..<challengeTeams.count {
+                if let cell = tableView.cellForRow(at: IndexPath(row: i, section: 0)) as? ChallengeTeamCell {
+                    cell.resetToInitialState()
+                }
+            }
+        }
+        
         updateChallengeSectionVisibility()
     }
     
@@ -910,17 +1020,45 @@ class ChallengeTeamMatchViewController: UIViewController {
         let index = sender.tag
         guard index < challengeTeams.count else { return }
         
-        let selectedChallengeTeam = challengeTeams[index]
-        selectedTeam = selectedChallengeTeam
-        
-        if let cell = tableView.cellForRow(at: IndexPath(row: index, section: 0)) as? ChallengeTeamCell {
-            cell.updateToSentState()
+        // If clicking the same team that's already selected, deselect it
+        if selectedTeamIndex == index {
+            // Deselect
+            selectedTeamIndex = nil
+            selectedTeam = nil
+            
+            // Reset all cells
+            for i in 0..<challengeTeams.count {
+                if let cell = tableView.cellForRow(at: IndexPath(row: i, section: 0)) as? ChallengeTeamCell {
+                    cell.resetToInitialState()
+                }
+            }
+            
+            // Update button title
+            challengeTeamButton.setTitle("Challenge team", for: .normal)
+            let isDarkMode = traitCollection.userInterfaceStyle == .dark
+            challengeTeamButton.setTitleColor(isDarkMode ? .systemGray2 : .darkGray, for: .normal)
+        } else {
+            // Deselect previously selected team if any
+            if let previousIndex = selectedTeamIndex {
+                if let previousCell = tableView.cellForRow(at: IndexPath(row: previousIndex, section: 0)) as? ChallengeTeamCell {
+                    previousCell.resetToInitialState()
+                }
+            }
+            
+            // Select new team
+            selectedTeamIndex = index
+            selectedTeam = challengeTeams[index]
+            
+            // Update newly selected cell
+            if let cell = tableView.cellForRow(at: IndexPath(row: index, section: 0)) as? ChallengeTeamCell {
+                cell.updateToSelectedState()
+            }
+            
+            // Update button title to show selected team
+            challengeTeamButton.setTitle(selectedTeam?.name, for: .normal)
+            let isDarkMode = traitCollection.userInterfaceStyle == .dark
+            challengeTeamButton.setTitleColor(isDarkMode ? .primaryWhite : .primaryBlack, for: .normal)
         }
-        
-        // Update button title to show selected team
-        challengeTeamButton.setTitle(selectedChallengeTeam.name, for: .normal)
-        let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        challengeTeamButton.setTitleColor(isDarkMode ? .primaryWhite : .primaryBlack, for: .normal)
         
         // Collapse the list
         toggleTeamList()
@@ -1069,7 +1207,7 @@ class ChallengeTeamMatchViewController: UIViewController {
 // MARK: - UITableView DataSource & Delegate
 extension ChallengeTeamMatchViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return availableTeamNames.count
+        return challengeTeams.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -1233,7 +1371,7 @@ class ChallengeTeamCell: UITableViewCell {
     
     let sendButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Send", for: .normal)
+        button.setTitle("Send", for: .normal) // Changed from "Send" to "Select"
         button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         button.layer.cornerRadius = 15
@@ -1280,19 +1418,26 @@ class ChallengeTeamCell: UITableViewCell {
         teamNameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         containerView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         
+        resetToInitialState() // Set initial button state
+        sendButton.tag = index
+    }
+    
+    func resetToInitialState() {
+        let isDarkMode = UITraitCollection.current.userInterfaceStyle == .dark
         sendButton.setTitle("Send", for: .normal)
         sendButton.setTitleColor(.white, for: .normal)
         sendButton.backgroundColor = isDarkMode ? .systemGreenDark : .systemGreen
         sendButton.isEnabled = true
     }
     
-    func updateToSentState() {
+    func updateToSelectedState() {
         let isDarkMode = UITraitCollection.current.userInterfaceStyle == .dark
         sendButton.setTitle("Sent", for: .normal)
-        sendButton.setTitleColor(.white, for: .normal)
-        sendButton.backgroundColor = isDarkMode ? .quaternaryDark : .lightGray
-        sendButton.isEnabled = false
+        sendButton.setTitleColor(isDarkMode ? UIColor.white : UIColor.black, for: .normal)
+        sendButton.backgroundColor = isDarkMode ? .quaternaryDark : .quaternaryLight
+        sendButton.isEnabled = true
     }
+
 }
 
 // MARK: - SwiftUI Preview

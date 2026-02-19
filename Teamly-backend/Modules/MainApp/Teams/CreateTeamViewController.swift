@@ -25,35 +25,13 @@ struct FriendUser: Codable, Identifiable {
     }
 }
 
-//// Add this struct somewhere in your file
-//struct Profile: Codable {
-//    let id: UUID?
-//    let name: String?
-//    let gender: String?
-//    let age: Int?
-//    let college_id: Int?  // This is what we need
-//    let profile_pic: String?
-//    let created_at: String?
-//    let updated_at: String?
-//    
-//    enum CodingKeys: String, CodingKey {
-//        case id
-//        case name
-//        case gender
-//        case age
-//        case college_id = "college_id"
-//        case profile_pic = "profile_pic"
-//        case created_at = "created_at"
-//        case updated_at = "updated_at"
-//    }
-//}
-
 // MARK: - CreateTeamViewController (Bottom Sheet Modal)
 class CreateTeamViewController: UIViewController {
     
     // MARK: - Properties
     private var friends: [FriendUser] = []
     private var selectedFriends: Set<UUID> = [] // Track selected friend IDs
+    private var pendingInvitations: Set<UUID> = [] // Track friends who were sent invitations
     
     // Updated: Use Supabase sports instead of hardcoded enum
     private var sports: [Sport] = []
@@ -531,20 +509,26 @@ class CreateTeamViewController: UIViewController {
         nameLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        let addButton = UIButton(type: .system)
-        addButton.setTitle("Add", for: .normal)
-        addButton.setTitleColor(.white, for: .normal)
-        addButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        addButton.backgroundColor = .systemGreen
-        addButton.layer.cornerRadius = 12
-        addButton.addTarget(self, action: #selector(addFriendTapped(_:)), for: .touchUpInside)
-        addButton.translatesAutoresizingMaskIntoConstraints = false
-        addButton.tag = friends.firstIndex(where: { $0.id == friend.id }) ?? 0
+        let inviteButton = UIButton(type: .system)
+        inviteButton.setTitle("Invite", for: .normal)
+        inviteButton.setTitleColor(.white, for: .normal)
+        inviteButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+        inviteButton.backgroundColor = .systemGreen
+        inviteButton.layer.cornerRadius = 12
+        inviteButton.addTarget(self, action: #selector(inviteFriendTapped(_:)), for: .touchUpInside)
+        inviteButton.translatesAutoresizingMaskIntoConstraints = false
+        inviteButton.tag = friends.firstIndex(where: { $0.id == friend.id }) ?? 0
+        
+        // Check if invitation was already sent
+        if pendingInvitations.contains(friend.id) {
+            inviteButton.setTitle("Sent", for: .normal)
+            inviteButton.backgroundColor = .systemGray
+        }
         
         avatarView.addSubview(avatarIcon)
         rowView.addSubview(avatarView)
         rowView.addSubview(nameLabel)
-        rowView.addSubview(addButton)
+        rowView.addSubview(inviteButton)
         
         NSLayoutConstraint.activate([
             rowView.heightAnchor.constraint(equalToConstant: 60),
@@ -559,12 +543,12 @@ class CreateTeamViewController: UIViewController {
             
             nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 17),
             nameLabel.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
-            nameLabel.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -10),
+            nameLabel.trailingAnchor.constraint(equalTo: inviteButton.leadingAnchor, constant: -10),
             
-            addButton.trailingAnchor.constraint(equalTo: rowView.trailingAnchor),
-            addButton.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
-            addButton.widthAnchor.constraint(equalToConstant: 70),
-            addButton.heightAnchor.constraint(equalToConstant: 25)
+            inviteButton.trailingAnchor.constraint(equalTo: rowView.trailingAnchor),
+            inviteButton.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
+            inviteButton.widthAnchor.constraint(equalToConstant: 70),
+            inviteButton.heightAnchor.constraint(equalToConstant: 25)
         ])
         
         return rowView
@@ -780,57 +764,97 @@ class CreateTeamViewController: UIViewController {
                 let session = try await supabase.auth.session
                 let userId = session.user.id
                 
-                // Step 1: Fetch current user's college_id from profiles table
-                let userProfile: Profile = try await supabase
+                // Step 1: Fetch current user's name and college_id from profiles table
+                struct ProfileInfo: Codable {
+                    let name: String?
+                    let college_id: Int?
+                }
+                
+                let userProfile: ProfileInfo = try await supabase
                     .from("profiles")
-                    .select()
+                    .select("name, college_id")
                     .eq("id", value: userId)
                     .single()
                     .execute()
                     .value
-
-                // Step 2: Create the team with college_id
-                let newTeam = TeamCreation(
+                
+                let senderName = userProfile.name ?? "Someone"
+                
+                // Step 2: Create the team with college_id using a proper struct
+                struct NewTeam: Codable {
+                    let name: String
+                    let sport_id: Int
+                    let captain_id: String
+                    let college_id: Int?
+                }
+                
+                let newTeam = NewTeam(
                     name: teamName,
                     sport_id: selectedSport!.id,
-                    captain_id: userId,
-                    college_id: userProfile.college_id  // Pass the college_id
+                    captain_id: userId.uuidString,
+                    college_id: userProfile.college_id
                 )
                 
-                let createdTeam: TeamResponse = try await supabase
+                print("📝 Creating team with data: \(newTeam)")
+                
+                // Insert the team
+                try await supabase
                     .from("teams")
                     .insert(newTeam)
+                    .execute()
+                
+                print("✅ Team insert executed")
+                
+                // Step 3: Fetch the newly created team
+                let createdTeams: [TeamResponse] = try await supabase
+                    .from("teams")
                     .select()
-                    .single()
+                    .eq("name", value: teamName)
+                    .eq("captain_id", value: userId.uuidString)
+                    .order("created_at", ascending: false)
+                    .limit(1)
                     .execute()
                     .value
-
-                // Rest of the code remains the same...
-                // Add current user as captain to team_members
-                let captainMember = TeamMemberCreation(
-                    team_id: createdTeam.id,
-                    user_id: userId,
+                
+                guard let createdTeam = createdTeams.first else {
+                    throw NSError(domain: "CreateTeam", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not find created team"])
+                }
+                
+                let createdTeamId = createdTeam.id
+                print("✅ Team found with ID: \(createdTeamId)")
+                
+                // Step 4: Add current user as captain to team_members
+                struct NewTeamMember: Codable {
+                    let team_id: String
+                    let user_id: String
+                    let role: String
+                }
+                
+                let captainMember = NewTeamMember(
+                    team_id: createdTeamId.uuidString,
+                    user_id: userId.uuidString,
                     role: "captain"
                 )
                 
-                _ = try await supabase
+                try await supabase
                     .from("team_members")
                     .insert(captainMember)
                     .execute()
                 
-                // Add selected friends to team_members as regular members
-                for friendId in selectedFriends {
-                    let friendMember = TeamMemberCreation(
-                        team_id: createdTeam.id,
-                        user_id: friendId,
-                        role: "member"
+                print("✅ Captain added to team_members")
+                
+                // Step 5: Send notifications to invited friends
+                for friendId in pendingInvitations {
+                    try await sendTeamInvitationNotification(
+                        senderId: userId,
+                        senderName: senderName,
+                        receiverId: friendId,
+                        teamName: teamName,
+                        sportName: selectedSport!.name
                     )
-                    
-                    _ = try await supabase
-                        .from("team_members")
-                        .insert(friendMember)
-                        .execute()
                 }
+                
+                print("✅ Notifications sent to \(pendingInvitations.count) friends")
 
                 await MainActor.run {
                     // Call completion handler and dismiss
@@ -839,12 +863,41 @@ class CreateTeamViewController: UIViewController {
                 }
                 
             } catch {
-                print("Error creating team: \(error)")
+                print("❌ Error creating team: \(error)")
                 await MainActor.run {
                     self.showError(message: "Failed to create team. Please try again.")
                 }
             }
         }
+    }
+
+    // MARK: - Notification Methods
+    private func sendTeamInvitationNotification(senderId: UUID, senderName: String, receiverId: UUID, teamName: String, sportName: String) async throws {
+        
+        let message = "\(senderName) has requested you to join their \(sportName) team \(teamName)"
+        
+        // Create notification using a proper struct
+        struct NewNotification: Codable {
+            let sender_id: String
+            let receiver_id: String
+            let type: String
+            let message: String
+        }
+        
+        let notification = NewNotification(
+            sender_id: senderId.uuidString,
+            receiver_id: receiverId.uuidString,
+            type: "team_invitation",
+            message: message
+        )
+        
+        // Insert notification
+        try await supabase
+            .from("notifications")
+            .insert(notification)
+            .execute()
+        
+        print("✅ Team invitation notification sent to \(receiverId)")
     }
     
     private func showError(message: String) {
@@ -862,20 +915,33 @@ class CreateTeamViewController: UIViewController {
         togglePlayersDropdown()
     }
     
-    @objc private func addFriendTapped(_ sender: UIButton) {
+    @objc private func inviteFriendTapped(_ sender: UIButton) {
         let index = sender.tag
         guard index < friends.count else { return }
         
         let friendId = friends[index].id
         
-        if selectedFriends.contains(friendId) {
-            selectedFriends.remove(friendId)
-            sender.setTitle("Add", for: .normal)
-            sender.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .systemGreenDark : .systemGreen
+        if pendingInvitations.contains(friendId) {
+            // If already invited, do nothing (or you could allow un-inviting)
+            return
         } else {
-            selectedFriends.insert(friendId)
-            sender.setTitle("Added", for: .normal)
-            sender.backgroundColor = .systemGreen
+            // Add to pending invitations
+            pendingInvitations.insert(friendId)
+            
+            // Update button appearance
+            sender.setTitle("Sent", for: .normal)
+            sender.backgroundColor = .systemGray
+            
+            // Show subtle feedback
+            UIView.animate(withDuration: 0.1, animations: {
+                sender.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+            }) { _ in
+                UIView.animate(withDuration: 0.1) {
+                    sender.transform = .identity
+                }
+            }
+            
+            print("📨 Invitation will be sent to \(friends[index].displayName) when team is created")
         }
     }
 }
@@ -907,13 +973,16 @@ struct TeamResponse: Codable {
     let name: String
     let sport_id: Int
     let captain_id: UUID
+    let college_id: Int?
     let created_at: String
     
     enum CodingKeys: String, CodingKey {
-        case id, name
-        case sport_id = "sport_id"
-        case captain_id = "captain_id"
-        case created_at = "created_at"
+        case id
+        case name
+        case sport_id
+        case captain_id
+        case college_id
+        case created_at
     }
 }
 
@@ -942,6 +1011,25 @@ struct Friend: Codable {
         case user_id = "user_id"
         case friend_id = "friend_id"
         case status
+        case created_at = "created_at"
+        case updated_at = "updated_at"
+    }
+}
+
+// MARK: - Notification Model
+struct NotificationCreation: Codable {
+    let sender_id: String
+    let receiver_id: String
+    let type: String
+    let message: String
+    let created_at: String
+    let updated_at: String
+    
+    enum CodingKeys: String, CodingKey {
+        case sender_id = "sender_id"
+        case receiver_id = "receiver_id"
+        case type
+        case message
         case created_at = "created_at"
         case updated_at = "updated_at"
     }

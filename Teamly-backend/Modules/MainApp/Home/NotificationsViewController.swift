@@ -15,6 +15,13 @@ class NotificationsViewController: UIViewController {
         case friendRequest = "friend_request"
         case friendRequestAccepted = "friend_request_accepted"
         case friendRequestDeclined = "friend_request_declined"
+        case teamInvitation = "team_invitation"
+        case teamInvitationAccepted = "team_invitation_accepted"
+        case teamInvitationDeclined = "team_invitation_declined"
+        
+        var isExpandable: Bool {
+            return self == .friendRequest || self == .teamInvitation
+        }
     }
     
     struct Notification {
@@ -117,13 +124,12 @@ class NotificationsViewController: UIViewController {
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
             updateColors()
             updateGradientColors()
-            tableView.reloadData() // Reload table to update cell colors
+            tableView.reloadData()
         }
     }
     
     // MARK: - Setup
     private func setupUI() {
-        // Set initial background color based on current mode
         updateColors()
         
         view.addSubview(topGreenTint)
@@ -165,6 +171,8 @@ class NotificationsViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(NotificationCell.self, forCellReuseIdentifier: "NotificationCell")
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 80
     }
     
     // MARK: - Data Fetching
@@ -195,7 +203,6 @@ class NotificationsViewController: UIViewController {
         
         Task {
             do {
-                // Fetch notifications where the current user is the receiver
                 let fetchedNotifications: [SupabaseNotification] = try await supabase
                     .from("notifications")
                     .select()
@@ -204,22 +211,25 @@ class NotificationsViewController: UIViewController {
                     .execute()
                     .value
                 
-                // Transform Supabase data to our Notification model
                 var transformedNotifications: [Notification] = []
                 
                 for fetchedNotif in fetchedNotifications {
-                    // Parse the message to extract name and actual message
-                    let (userName, message) = parseNotificationMessage(fetchedNotif.message)
-                    
-                    // Fetch sender's name from profiles table using your existing Profile struct
-                    let senderName = try await fetchUserName(userId: fetchedNotif.senderId)
-                    
-                    // Use the sender's actual name instead of parsed name for consistency
-                    let finalName = senderName ?? userName
-                    
                     guard let type = NotificationType(rawValue: fetchedNotif.type) else {
                         continue
                     }
+                    
+                    switch type {
+                    case .friendRequestAccepted, .teamInvitationAccepted:
+                        guard fetchedNotif.message.lowercased().contains("accepted") else { continue }
+                    case .friendRequestDeclined, .teamInvitationDeclined:
+                        guard fetchedNotif.message.lowercased().contains("declined") else { continue }
+                    default:
+                        break
+                    }
+                    
+                    let (userName, message) = parseNotificationMessage(fetchedNotif.message)
+                    let senderName = try await fetchUserName(userId: fetchedNotif.senderId)
+                    let finalName = senderName ?? userName
                     
                     let notification = Notification(
                         id: fetchedNotif.id,
@@ -256,7 +266,6 @@ class NotificationsViewController: UIViewController {
     
     private func fetchUserName(userId: UUID) async throws -> String? {
         do {
-            // Using your existing Profile struct from other file
             let profile: Profile? = try await supabase
                 .from("profiles")
                 .select()
@@ -264,8 +273,7 @@ class NotificationsViewController: UIViewController {
                 .single()
                 .execute()
                 .value
-            
-            return profile?.name // Changed from fullName to name to match your Profile struct
+            return profile?.name
         } catch {
             print("Error fetching user name: \(error)")
             return nil
@@ -273,28 +281,19 @@ class NotificationsViewController: UIViewController {
     }
     
     private func parseNotificationMessage(_ fullMessage: String) -> (name: String, message: String) {
-        // Split the message by spaces
         let components = fullMessage.components(separatedBy: " ")
-        
-        guard components.count > 1 else {
-            return ("", fullMessage)
-        }
-        
-        // First word is the name
+        guard components.count > 1 else { return ("", fullMessage) }
         let name = components[0]
-        
-        // Rest is the message
         let message = components[1...].joined(separator: " ")
-        
         return (name, message)
     }
     
+    // MARK: - Friend Request Handling
     private func handleFriendRequestAction(notificationId: Int, action: String, cell: NotificationCell) {
         guard let notification = notifications.first(where: { $0.id == notificationId }) else { return }
         
         Task {
             do {
-                // 1. Update the existing notification type in database
                 let updateType: String = action == "accept" ? "friend_request_accepted" : "friend_request_declined"
                 
                 struct NotificationUpdate: Encodable {
@@ -313,8 +312,6 @@ class NotificationsViewController: UIViewController {
                     .eq("id", value: notificationId)
                     .execute()
                 
-                // 2. Create a new notification for the sender (interchanged sender/receiver)
-                let senderName = try await fetchUserName(userId: notification.senderId)
                 let receiverName = try await fetchUserName(userId: notification.receiverId)
                 
                 let newNotificationMessage: String
@@ -325,8 +322,8 @@ class NotificationsViewController: UIViewController {
                 }
                 
                 let newNotification = NotificationInsert(
-                    sender_id: notification.receiverId, // Interchanged: original receiver becomes sender
-                    receiver_id: notification.senderId, // Interchanged: original sender becomes receiver
+                    sender_id: notification.receiverId,
+                    receiver_id: notification.senderId,
                     type: updateType,
                     message: newNotificationMessage,
                     created_at: ISO8601DateFormatter().string(from: Date()),
@@ -338,39 +335,171 @@ class NotificationsViewController: UIViewController {
                     .insert(newNotification)
                     .execute()
                 
-                // 3. Handle friends table based on action
                 if action == "accept" {
                     try await createAcceptedFriendship(senderId: notification.senderId, receiverId: notification.receiverId)
                 } else {
-                    // For decline, just delete any existing pending friend request
                     try await deletePendingFriendship(senderId: notification.senderId, receiverId: notification.receiverId)
                 }
                 
                 await MainActor.run {
-                    // Remove the notification from local array
                     notifications.removeAll { $0.id == notificationId }
                     tableView.reloadData()
                     
                     if action == "accept" {
-                        // Show success message
                         showAlert(title: "Friend Request Accepted", message: "You and \(notification.userName) are now friends!")
                     } else {
-                        // Show declined message
                         showAlert(title: "Friend Request Declined", message: "You declined \(notification.userName)'s friend request.")
                     }
                 }
                 
             } catch {
                 print("Error handling friend request: \(error)")
-                await MainActor.run {
-                    showError("Failed to process friend request")
-                }
+                await MainActor.run { showError("Failed to process friend request") }
             }
         }
     }
     
+    // MARK: - Team Invitation Handling
+    private func handleTeamInvitationAction(notificationId: Int, action: String) {
+        guard let notification = notifications.first(where: { $0.id == notificationId }) else { return }
+        
+        Task {
+            do {
+                let updateType: String = action == "accept" ? "team_invitation_accepted" : "team_invitation_declined"
+                let receiverName = try await fetchUserName(userId: notification.receiverId) ?? "User"
+                let teamName = extractTeamName(from: notification.message)
+                
+                struct NotificationUpdate: Encodable {
+                    let type: String
+                    let updated_at: String
+                }
+                
+                let updateData = NotificationUpdate(
+                    type: updateType,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("notifications")
+                    .update(updateData)
+                    .eq("id", value: notificationId)
+                    .execute()
+                
+                let responseMessage: String
+                if action == "accept" {
+                    responseMessage = "\(receiverName) accepted your invite to join team \(teamName)"
+                } else {
+                    responseMessage = "\(receiverName) declined your invite to join team \(teamName)"
+                }
+                
+                let responseNotification = NotificationInsert(
+                    sender_id: notification.receiverId,
+                    receiver_id: notification.senderId,
+                    type: updateType,
+                    message: responseMessage,
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                try await supabase
+                    .from("notifications")
+                    .insert(responseNotification)
+                    .execute()
+                
+                if action == "accept" {
+                    try await addUserAsTeamMember(
+                        userId: notification.receiverId,
+                        senderId: notification.senderId,
+                        teamName: teamName
+                    )
+                }
+                
+                await MainActor.run {
+                    notifications.removeAll { $0.id == notificationId }
+                    tableView.reloadData()
+                    if notifications.isEmpty { showEmptyState() }
+                    
+                    if action == "accept" {
+                        showAlert(title: "Team Joined!", message: "You have joined the team \(teamName).")
+                    } else {
+                        showAlert(title: "Invitation Declined", message: "You declined the invitation to join \(teamName).")
+                    }
+                }
+                
+            } catch {
+                print("Error handling team invitation: \(error)")
+                await MainActor.run { showError("Failed to process team invitation") }
+            }
+        }
+    }
+    
+    private func extractTeamName(from message: String) -> String {
+        let anchor = "to join their "
+        if let anchorRange = message.range(of: anchor) {
+            let afterAnchor = String(message[anchorRange.upperBound...])
+            if let teamRange = afterAnchor.range(of: " team ") {
+                let teamName = String(afterAnchor[teamRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if !teamName.isEmpty { return teamName }
+            }
+        }
+        if let range = message.range(of: " team ", options: .backwards) {
+            let teamName = String(message[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if !teamName.isEmpty { return teamName }
+        }
+        return "Unknown Team"
+    }
+    
+    private func addUserAsTeamMember(userId: UUID, senderId: UUID, teamName: String) async throws {
+        print("🔍 Looking for team named '\(teamName)' with captain \(senderId)")
+        
+        var teams: [TeamResponse] = try await supabase
+            .from("teams")
+            .select()
+            .eq("name", value: teamName)
+            .eq("captain_id", value: senderId)
+            .limit(1)
+            .execute()
+            .value
+        
+        if teams.isEmpty {
+            print("⚠️ No team found with captain filter, trying name-only lookup")
+            teams = try await supabase
+                .from("teams")
+                .select()
+                .eq("name", value: teamName)
+                .limit(1)
+                .execute()
+                .value
+        }
+        
+        guard let team = teams.first else {
+            throw NSError(domain: "TeamInvitation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not find team '\(teamName)'"])
+        }
+        
+        print("✅ Found team: \(team.name) (id: \(team.id))")
+        
+        struct NewTeamMember: Codable {
+            let team_id: String
+            let user_id: String
+            let role: String
+        }
+        
+        let member = NewTeamMember(
+            team_id: team.id.uuidString,
+            user_id: userId.uuidString,
+            role: "member"
+        )
+        
+        try await supabase
+            .from("team_members")
+            .insert(member)
+            .execute()
+        
+        print("✅ User \(userId) added as member to team \(teamName)")
+    }
+    
+    // MARK: - Friendship Helpers
     private func createAcceptedFriendship(senderId: UUID, receiverId: UUID) async throws {
-        // Create a new struct for friendship updates that excludes the id
         struct FriendshipUpdate: Encodable {
             let user_id: UUID
             let friend_id: UUID
@@ -379,106 +508,49 @@ class NotificationsViewController: UIViewController {
             let updated_at: String
         }
         
-        // Create two rows in friends table for bidirectional friendship
-        
-        // First friendship: sender -> receiver
         let friendship1 = FriendshipUpdate(
-            user_id: senderId,
-            friend_id: receiverId,
-            status: "accepted",
+            user_id: senderId, friend_id: receiverId, status: "accepted",
             created_at: ISO8601DateFormatter().string(from: Date()),
             updated_at: ISO8601DateFormatter().string(from: Date())
         )
-        
-        // Second friendship: receiver -> sender
         let friendship2 = FriendshipUpdate(
-            user_id: receiverId,
-            friend_id: senderId,
-            status: "accepted",
+            user_id: receiverId, friend_id: senderId, status: "accepted",
             created_at: ISO8601DateFormatter().string(from: Date()),
             updated_at: ISO8601DateFormatter().string(from: Date())
         )
         
-        // Try to update existing records first, if they exist
         do {
-            // Check if sender->receiver friendship exists
             let existingFriendship1: Friendship? = try await supabase
-                .from("friends")
-                .select()
-                .eq("user_id", value: senderId)
-                .eq("friend_id", value: receiverId)
-                .single()
-                .execute()
-                .value
+                .from("friends").select()
+                .eq("user_id", value: senderId).eq("friend_id", value: receiverId)
+                .single().execute().value
             
             if let existing = existingFriendship1 {
-                // Update existing record
-                let updatedFriendship1 = FriendshipUpdate(
-                    user_id: existing.user_id,
-                    friend_id: existing.friend_id,
-                    status: "accepted",
-                    created_at: existing.created_at,
-                    updated_at: ISO8601DateFormatter().string(from: Date())
-                )
-                
-                try await supabase
-                    .from("friends")
-                    .update(updatedFriendship1)
-                    .eq("id", value: existing.id)
-                    .execute()
+                let updated = FriendshipUpdate(user_id: existing.user_id, friend_id: existing.friend_id,
+                    status: "accepted", created_at: existing.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date()))
+                try await supabase.from("friends").update(updated).eq("id", value: existing.id).execute()
             } else {
-                // Insert new record
-                try await supabase
-                    .from("friends")
-                    .insert(friendship1)
-                    .execute()
+                try await supabase.from("friends").insert(friendship1).execute()
             }
             
-            // Check if receiver->sender friendship exists
             let existingFriendship2: Friendship? = try await supabase
-                .from("friends")
-                .select()
-                .eq("user_id", value: receiverId)
-                .eq("friend_id", value: senderId)
-                .single()
-                .execute()
-                .value
+                .from("friends").select()
+                .eq("user_id", value: receiverId).eq("friend_id", value: senderId)
+                .single().execute().value
             
             if let existing = existingFriendship2 {
-                // Update existing record
-                let updatedFriendship2 = FriendshipUpdate(
-                    user_id: existing.user_id,
-                    friend_id: existing.friend_id,
-                    status: "accepted",
-                    created_at: existing.created_at,
-                    updated_at: ISO8601DateFormatter().string(from: Date())
-                )
-                
-                try await supabase
-                    .from("friends")
-                    .update(updatedFriendship2)
-                    .eq("id", value: existing.id)
-                    .execute()
+                let updated = FriendshipUpdate(user_id: existing.user_id, friend_id: existing.friend_id,
+                    status: "accepted", created_at: existing.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date()))
+                try await supabase.from("friends").update(updated).eq("id", value: existing.id).execute()
             } else {
-                // Insert new record
-                try await supabase
-                    .from("friends")
-                    .insert(friendship2)
-                    .execute()
+                try await supabase.from("friends").insert(friendship2).execute()
             }
             
-            print("Created/updated bidirectional friendships: \(senderId) ↔ \(receiverId)")
-            
         } catch {
-            // If single() fails (no records), insert both new records
-            if let supabaseError = error as? PostgrestError,
-               supabaseError.code == "PGRST116" { // No rows found
-                try await supabase
-                    .from("friends")
-                    .insert([friendship1, friendship2])
-                    .execute()
-                
-                print("Created new bidirectional friendships: \(senderId) ↔ \(receiverId)")
+            if let supabaseError = error as? PostgrestError, supabaseError.code == "PGRST116" {
+                try await supabase.from("friends").insert([friendship1, friendship2]).execute()
             } else {
                 throw error
             }
@@ -486,22 +558,13 @@ class NotificationsViewController: UIViewController {
     }
 
     private func deletePendingFriendship(senderId: UUID, receiverId: UUID) async throws {
-        // Delete any pending friend requests between these users
-        // We only delete if status is 'pending'
-        
         try await supabase
-            .from("friends")
-            .delete()
-            .eq("user_id", value: senderId)
-            .eq("friend_id", value: receiverId)
-            .eq("status", value: "pending")
-            .execute()
-        
-        print("Deleted pending friendship request: \(senderId) → \(receiverId)")
+            .from("friends").delete()
+            .eq("user_id", value: senderId).eq("friend_id", value: receiverId)
+            .eq("status", value: "pending").execute()
     }
     
     private func createFriendship(senderId: UUID, receiverId: UUID) async throws {
-        // This function now redirects to createAcceptedFriendship
         try await createAcceptedFriendship(senderId: senderId, receiverId: receiverId)
     }
     
@@ -525,9 +588,7 @@ class NotificationsViewController: UIViewController {
         emptyLabel.textAlignment = .center
         emptyLabel.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
-        
         tableView.backgroundView = emptyLabel
-        
         NSLayoutConstraint.activate([
             emptyLabel.centerXAnchor.constraint(equalTo: tableView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor)
@@ -537,63 +598,38 @@ class NotificationsViewController: UIViewController {
     // MARK: - Color Updates
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
-        // Update view background
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
-        
-        // Update title label
         titleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        // Update glass button
         updateGlassButtonAppearance(isDarkMode: isDarkMode)
-        
-        // Update table view background
         tableView.backgroundColor = .clear
-        
-        // Update loading indicator
         loadingIndicator.color = isDarkMode ? .primaryWhite : .primaryBlack
     }
     
     private func updateGradientColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        
         if isDarkMode {
             let darkGreen = UIColor(red: 0.0, green: 0.15, blue: 0.0, alpha: 1.0)
-            gradientLayer.colors = [
-                darkGreen.cgColor,
-                UIColor.clear.cgColor
-            ]
+            gradientLayer.colors = [darkGreen.cgColor, UIColor.clear.cgColor]
         } else {
             let lightGreen = UIColor(red: 53/255, green: 199/255, blue: 89/255, alpha: 0.3)
-            gradientLayer.colors = [
-                lightGreen.cgColor,
-                UIColor.clear.cgColor
-            ]
+            gradientLayer.colors = [lightGreen.cgColor, UIColor.clear.cgColor]
         }
-        
         gradientLayer.locations = [0.0, 0.25]
         gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
         gradientLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
     }
     
     private func updateGlassButtonAppearance(isDarkMode: Bool) {
-        glassBackButton.backgroundColor = isDarkMode ?
-            UIColor(white: 1, alpha: 0.1) :
-            UIColor(white: 0, alpha: 0.05)
-        glassBackButton.layer.borderColor = (isDarkMode ?
-            UIColor(white: 1, alpha: 0.2) :
-            UIColor(white: 0, alpha: 0.1)).cgColor
+        glassBackButton.backgroundColor = isDarkMode ? UIColor(white: 1, alpha: 0.1) : UIColor(white: 0, alpha: 0.05)
+        glassBackButton.layer.borderColor = (isDarkMode ? UIColor(white: 1, alpha: 0.2) : UIColor(white: 0, alpha: 0.1)).cgColor
         glassBackButton.tintColor = isDarkMode ? .systemGreenDark : .systemGreen
     }
     
     // MARK: - Actions
     @objc private func backButtonTapped() {
-        // Check if we're in a navigation controller stack
         if let navigationController = navigationController, navigationController.viewControllers.count > 1 {
-            // Pop back to HomeViewController
             navigationController.popViewController(animated: true)
         } else {
-            // We were presented modally, so dismiss
             dismiss(animated: true, completion: nil)
         }
     }
@@ -609,21 +645,17 @@ extension NotificationsViewController: UITableViewDelegate, UITableViewDataSourc
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "NotificationCell", for: indexPath) as? NotificationCell else {
             return UITableViewCell()
         }
-        
         let notification = notifications[indexPath.row]
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         cell.configure(with: notification, isDarkMode: isDarkMode)
         cell.delegate = self
         cell.selectionStyle = .none
-        
         return cell
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        var notification = notifications[indexPath.row]
-        
-        if notification.type == .friendRequest {
-            notification.isExpanded.toggle()
+        let notification = notifications[indexPath.row]
+        if notification.type.isExpandable {
             notifications[indexPath.row].isExpanded.toggle()
             tableView.reloadRows(at: [indexPath], with: .automatic)
         }
@@ -632,28 +664,17 @@ extension NotificationsViewController: UITableViewDelegate, UITableViewDataSourc
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { [weak self] (action, view, completionHandler) in
             guard let self = self else { return }
-            
             let notification = self.notifications[indexPath.row]
-            
             Task {
                 do {
-                    // Delete from database
                     try await self.supabase
-                        .from("notifications")
-                        .delete()
-                        .eq("id", value: notification.id)
-                        .execute()
-                    
+                        .from("notifications").delete()
+                        .eq("id", value: notification.id).execute()
                     await MainActor.run {
-                        // Remove from local array
                         self.notifications.remove(at: indexPath.row)
                         self.tableView.deleteRows(at: [indexPath], with: .fade)
-                        
-                        if self.notifications.isEmpty {
-                            self.showEmptyState()
-                        }
+                        if self.notifications.isEmpty { self.showEmptyState() }
                     }
-                    
                     completionHandler(true)
                 } catch {
                     print("Error deleting notification: \(error)")
@@ -664,10 +685,8 @@ extension NotificationsViewController: UITableViewDelegate, UITableViewDataSourc
                 }
             }
         }
-        
         deleteAction.backgroundColor = .systemRed
         deleteAction.image = UIImage(systemName: "trash.fill")
-        
         return UISwipeActionsConfiguration(actions: [deleteAction])
     }
 }
@@ -675,13 +694,44 @@ extension NotificationsViewController: UITableViewDelegate, UITableViewDataSourc
 // MARK: - NotificationCellDelegate
 extension NotificationsViewController: NotificationCellDelegate {
     func notificationCell(_ cell: NotificationCell, didTapAccept notification: Notification) {
-        print("Accepted: \(notification.userName)")
-        handleFriendRequestAction(notificationId: notification.id, action: "accept", cell: cell)
+        switch notification.type {
+        case .friendRequest:
+            handleFriendRequestAction(notificationId: notification.id, action: "accept", cell: cell)
+        case .teamInvitation:
+            handleTeamInvitationAction(notificationId: notification.id, action: "accept")
+        default:
+            break
+        }
     }
     
     func notificationCell(_ cell: NotificationCell, didTapDecline notification: Notification) {
-        print("Declined: \(notification.userName)")
-        handleFriendRequestAction(notificationId: notification.id, action: "decline", cell: cell)
+        switch notification.type {
+        case .friendRequest:
+            handleFriendRequestAction(notificationId: notification.id, action: "decline", cell: cell)
+        case .teamInvitation:
+            handleTeamInvitationAction(notificationId: notification.id, action: "decline")
+        default:
+            break
+        }
+    }
+    
+    func notificationCellDidTapName(_ cell: NotificationCell, notification: Notification) {
+        navigateToUserProfile(userId: notification.senderId, userName: notification.userName)
+    }
+}
+
+extension NotificationsViewController {
+    private func navigateToUserProfile(userId: UUID, userName: String) {
+        let profileVC = UserProfileViewController()
+        profileVC.userId = userId
+        profileVC.modalPresentationStyle = .fullScreen
+        if let navigationController = navigationController {
+            navigationController.pushViewController(profileVC, animated: true)
+        } else {
+            let navController = UINavigationController(rootViewController: profileVC)
+            navController.modalPresentationStyle = .fullScreen
+            present(navController, animated: true)
+        }
     }
 }
 
@@ -706,20 +756,24 @@ struct SupabaseNotification: Codable {
     }
 }
 
-// MARK: - NotificationCell
+// MARK: - NotificationCell Protocol
 protocol NotificationCellDelegate: AnyObject {
     func notificationCell(_ cell: NotificationCell, didTapAccept notification: NotificationsViewController.Notification)
     func notificationCell(_ cell: NotificationCell, didTapDecline notification: NotificationsViewController.Notification)
+    func notificationCellDidTapName(_ cell: NotificationCell, notification: NotificationsViewController.Notification)
 }
 
+// MARK: - NotificationCell
 class NotificationCell: UITableViewCell {
     weak var delegate: NotificationCellDelegate?
     private var notification: NotificationsViewController.Notification?
-    private var isDarkMode: Bool = true
+    private let nameTapGesture = UITapGestureRecognizer()
     
+    // MARK: - UI Components
     private let containerView: UIView = {
         let view = UIView()
-        view.layer.cornerRadius = 25
+        view.layer.cornerRadius = 20
+        view.clipsToBounds = true
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -733,7 +787,7 @@ class NotificationCell: UITableViewCell {
     
     private let avatarIcon: UIImageView = {
         let imageView = UIImageView()
-        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
         imageView.image = UIImage(systemName: "person.fill", withConfiguration: config)
         imageView.contentMode = .center
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -742,58 +796,84 @@ class NotificationCell: UITableViewCell {
     
     private let nameLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 17, weight: .bold)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
-    private let messageLabel: UILabel = {
-        let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 17, weight: .regular)
-        label.numberOfLines = 0
+        label.font = UIFont.systemFont(ofSize: 16, weight: .bold)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
     
     private let timeLabel: UILabel = {
         let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 15, weight: .regular)
+        label.font = UIFont.systemFont(ofSize: 13, weight: .regular)
+        label.setContentHuggingPriority(.required, for: .horizontal)
+        label.setContentCompressionResistancePriority(.required, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
     
+    // Collapsed: single-line truncated message (no buttons visible)
+    private let messageCollapsedLabel: UILabel = {
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.numberOfLines = 1
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+    
+    // Expanded: multi-line message (buttons visible to the right)
+    private let messageExpandedLabel: UILabel = {
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+    
+    // MARK: - Circular Action Buttons (right side, shown only when expanded)
+    
+    /// Green circle with ✓
     private let acceptButton: UIButton = {
         let button = UIButton(type: .system)
-        button.layer.cornerRadius = 25
-        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
-        let image = UIImage(systemName: "checkmark", withConfiguration: config)
-        button.setImage(image, for: .normal)
+        button.layer.cornerRadius = 20
+        button.clipsToBounds = true
+        button.isHidden = true
         button.translatesAutoresizingMaskIntoConstraints = false
+        let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .bold)
+        button.setImage(UIImage(systemName: "checkmark", withConfiguration: config), for: .normal)
+        button.tintColor = .systemGreen
+        //button.backgroundColor = UIColor(red: 0.18, green: 0.75, blue: 0.35, alpha: 1.0)
         return button
     }()
     
+    /// Dark circle with ✕
     private let declineButton: UIButton = {
         let button = UIButton(type: .system)
-        button.layer.cornerRadius = 25
-        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
-        let image = UIImage(systemName: "xmark", withConfiguration: config)
-        button.setImage(image, for: .normal)
+        button.layer.cornerRadius = 20
+        button.clipsToBounds = true
+        button.isHidden = true
         button.translatesAutoresizingMaskIntoConstraints = false
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        button.setImage(UIImage(systemName: "xmark", withConfiguration: config), for: .normal)
+        button.tintColor = .systemRed
         return button
     }()
     
-    private let buttonStack: UIStackView = {
-        let stack = UIStackView()
+    private lazy var actionButtonStack: UIStackView = {
+        let stack = UIStackView(arrangedSubviews: [acceptButton, declineButton])
         stack.axis = .horizontal
-        stack.spacing = 15
+        stack.spacing = 10
         stack.alignment = .center
+        stack.isHidden = true
         stack.translatesAutoresizingMaskIntoConstraints = false
         return stack
     }()
     
-    private var expandedConstraints: [NSLayoutConstraint] = []
-    private var collapsedConstraints: [NSLayoutConstraint] = []
+    // Collapsed-mode trailing constraint alternatives
+    private var collapsedTrailingFull: NSLayoutConstraint!    // to container edge (buttons hidden)
+    private var collapsedTrailingShort: NSLayoutConstraint!   // stops before buttons (not used in collapsed; kept for safety)
     
+    // MARK: - Init
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setupUI()
@@ -803,129 +883,170 @@ class NotificationCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
     
+    // MARK: - Setup
     private func setupUI() {
         backgroundColor = .clear
+        selectionStyle = .none
         
         contentView.addSubview(containerView)
         containerView.addSubview(avatarView)
         avatarView.addSubview(avatarIcon)
         containerView.addSubview(nameLabel)
-        containerView.addSubview(messageLabel)
         containerView.addSubview(timeLabel)
-        
-        buttonStack.addArrangedSubview(acceptButton)
-        buttonStack.addArrangedSubview(declineButton)
-        containerView.addSubview(buttonStack)
+        containerView.addSubview(messageCollapsedLabel)
+        containerView.addSubview(messageExpandedLabel)
+        containerView.addSubview(actionButtonStack)
         
         acceptButton.addTarget(self, action: #selector(acceptTapped), for: .touchUpInside)
         declineButton.addTarget(self, action: #selector(declineTapped), for: .touchUpInside)
+        nameLabel.isUserInteractionEnabled = true
+        nameTapGesture.addTarget(self, action: #selector(nameLabelTapped))
+        nameLabel.addGestureRecognizer(nameTapGesture)
+        
+        // These two constraints are mutually exclusive based on expand state
+        collapsedTrailingFull = messageCollapsedLabel.trailingAnchor.constraint(
+            equalTo: containerView.trailingAnchor, constant: -16)
+        collapsedTrailingShort = messageCollapsedLabel.trailingAnchor.constraint(
+            equalTo: actionButtonStack.leadingAnchor, constant: -12)
         
         NSLayoutConstraint.activate([
-            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            // Container
+            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
             containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
             
+            // Avatar — centred vertically in the container
             avatarView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 14),
-            avatarView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
-            avatarView.widthAnchor.constraint(equalToConstant: 35),
-            avatarView.heightAnchor.constraint(equalToConstant: 35),
-            
+            avatarView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            avatarView.widthAnchor.constraint(equalToConstant: 36),
+            avatarView.heightAnchor.constraint(equalToConstant: 36),
             avatarIcon.centerXAnchor.constraint(equalTo: avatarView.centerXAnchor),
             avatarIcon.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor),
             
-            nameLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 14),
+            // Name row
+            nameLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 18),
             nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 12),
-            nameLabel.trailingAnchor.constraint(equalTo: timeLabel.leadingAnchor, constant: -8),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -8),
             
-            timeLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
+            timeLabel.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
             timeLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
             
-            messageLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2),
-            messageLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 12),
-            messageLabel.trailingAnchor.constraint(equalTo: buttonStack.leadingAnchor, constant: -12),
-
-            buttonStack.centerYAnchor.constraint(equalTo: messageLabel.centerYAnchor),
-            buttonStack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
-
+            // COLLAPSED message — single line, trailing to container edge (default)
+            messageCollapsedLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 3),
+            messageCollapsedLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 12),
+            //messageCollapsedLabel.leadingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            messageCollapsedLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
             
-            acceptButton.widthAnchor.constraint(equalToConstant: 44),
-            acceptButton.heightAnchor.constraint(equalToConstant: 44),
-            declineButton.widthAnchor.constraint(equalToConstant: 44),
-            declineButton.heightAnchor.constraint(equalToConstant: 44)
+            // EXPANDED message — multi-line, trailing stops before buttons
+            messageExpandedLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 3),
+            messageExpandedLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 12),
+            messageExpandedLabel.trailingAnchor.constraint(equalTo: actionButtonStack.leadingAnchor, constant: -12),
+            messageExpandedLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20),
+            
+            // Circular buttons — centred vertically, pinned to trailing edge
+            actionButtonStack.centerYAnchor.constraint(equalTo: containerView.centerYAnchor, constant: 10),
+            actionButtonStack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -14),
+            
+            acceptButton.widthAnchor.constraint(equalToConstant: 40),
+            acceptButton.heightAnchor.constraint(equalToConstant: 40),
+            declineButton.widthAnchor.constraint(equalToConstant: 40),
+            declineButton.heightAnchor.constraint(equalToConstant: 40),
         ])
         
-        collapsedConstraints = [
-            containerView.heightAnchor.constraint(equalToConstant: 80)
-        ]
-        
-        expandedConstraints = [
-            buttonStack.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16)
-        ]
+        // Start in collapsed state
+        collapsedTrailingFull.isActive = true
     }
     
+    // MARK: - Configure
     func configure(with notification: NotificationsViewController.Notification, isDarkMode: Bool) {
         self.notification = notification
-        self.isDarkMode = isDarkMode
         
-        // Update colors based on mode
         updateColors(isDarkMode: isDarkMode)
+        updateAvatarIcon(for: notification.type)
         
         nameLabel.text = notification.userName
         
-        // Format the time
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        let relativeTime = formatter.localizedString(for: notification.createdAt, relativeTo: Date())
-        timeLabel.text = relativeTime
+        timeLabel.text = formatter.localizedString(for: notification.createdAt, relativeTo: Date())
         
-        if notification.isExpanded && notification.type == .friendRequest {
-            messageLabel.text = notification.message
-            buttonStack.isHidden = false
-            NSLayoutConstraint.deactivate(collapsedConstraints)
-            NSLayoutConstraint.activate(expandedConstraints)
+        let showExpanded = notification.isExpanded && notification.type.isExpandable
+        
+        if showExpanded {
+            // Expanded state: full message + circular buttons on the right
+            messageCollapsedLabel.isHidden = true
+            collapsedTrailingFull.isActive = false
+            collapsedTrailingShort.isActive = false
+            
+            messageExpandedLabel.isHidden = false
+            messageExpandedLabel.text = notification.message
+            
+            actionButtonStack.isHidden = false
+            acceptButton.isHidden = false
+            declineButton.isHidden = false
         } else {
-            messageLabel.text = notification.message
-            buttonStack.isHidden = true
-            NSLayoutConstraint.deactivate(expandedConstraints)
-            NSLayoutConstraint.activate(collapsedConstraints)
+            // Collapsed state: single-line truncated, no buttons
+            messageExpandedLabel.isHidden = true
+            actionButtonStack.isHidden = true
+            acceptButton.isHidden = true
+            declineButton.isHidden = true
+            
+            messageCollapsedLabel.isHidden = false
+            messageCollapsedLabel.text = notification.message
+            
+            collapsedTrailingShort.isActive = false
+            collapsedTrailingFull.isActive = true
         }
-        
-        // Hide buttons for non-friend-request notifications
-        if notification.type != .friendRequest {
-            buttonStack.isHidden = true
+    }
+    
+    // MARK: - Helpers
+    private func updateAvatarIcon(for type: NotificationsViewController.NotificationType) {
+        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+        switch type {
+        case .teamInvitation, .teamInvitationAccepted, .teamInvitationDeclined:
+            avatarIcon.image = UIImage(systemName: "person.fill", withConfiguration: config)
+        default:
+            avatarIcon.image = UIImage(systemName: "person.fill", withConfiguration: config)
         }
     }
     
     private func updateColors(isDarkMode: Bool) {
-        // Update container view
         containerView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         
-        // Update avatar view
         avatarView.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
+        avatarIcon.tintColor = isDarkMode ? UIColor.quaternaryLight : .quaternaryDark
         
-        // Update avatar icon
-        avatarIcon.tintColor = isDarkMode ?
-        UIColor.quaternaryLight :
-            .quaternaryDark
-        
-        // Update labels
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        messageLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        timeLabel.textColor = isDarkMode ?
-            UIColor(white: 0.5, alpha: 1.0) :
-            UIColor(white: 0.4, alpha: 1.0)
         
-        // Update button backgrounds and tints
-        let buttonBackground = isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight
-        acceptButton.backgroundColor = buttonBackground
-        declineButton.backgroundColor = buttonBackground
+        let msgColor: UIColor = isDarkMode
+            ? UIColor(white: 0.70, alpha: 1.0)
+            : UIColor(white: 0.35, alpha: 1.0)
+        messageCollapsedLabel.textColor = msgColor
+        messageExpandedLabel.textColor = msgColor
         
-        // Button tints use system colors that remain consistent
+        timeLabel.textColor = UIColor(white: 0.5, alpha: 1.0)
+        
+        // Accept — always green circle, white checkmark
+        //acceptButton.backgroundColor = UIColor(red: 0.18, green: 0.75, blue: 0.35, alpha: 1.0)
+        
+        
+        acceptButton.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
+        declineButton.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
+        
         acceptButton.tintColor = .systemGreen
         declineButton.tintColor = .systemRed
+        
+//        // Decline — dark circle, red X
+//        declineButton.backgroundColor = isDarkMode
+//            ? UIColor(red: 0.22, green: 0.22, blue: 0.22, alpha: 1.0)
+//            : UIColor(red: 0.88, green: 0.88, blue: 0.88, alpha: 1.0)
+//        declineButton.tintColor = isDarkMode
+//            ? UIColor(red: 1.0, green: 0.27, blue: 0.27, alpha: 1.0)
+//            : UIColor(red: 0.85, green: 0.12, blue: 0.12, alpha: 1.0)
     }
     
+    // MARK: - Actions
     @objc private func acceptTapped() {
         guard let notification = notification else { return }
         delegate?.notificationCell(self, didTapAccept: notification)
@@ -934,6 +1055,14 @@ class NotificationCell: UITableViewCell {
     @objc private func declineTapped() {
         guard let notification = notification else { return }
         delegate?.notificationCell(self, didTapDecline: notification)
+    }
+    
+    @objc private func nameLabelTapped() {
+        UIView.animate(withDuration: 0.1, animations: { self.nameLabel.alpha = 0.5 }) { _ in
+            UIView.animate(withDuration: 0.1) { self.nameLabel.alpha = 1.0 }
+        }
+        guard let notification = notification else { return }
+        delegate?.notificationCellDidTapName(self, notification: notification)
     }
 }
 
@@ -961,9 +1090,6 @@ struct NotificationsViewControllerRepresentable: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> NotificationsViewController {
         return NotificationsViewController()
     }
-    
-    func updateUIViewController(_ uiViewController: NotificationsViewController, context: Context) {
-        // No update needed
-    }
+    func updateUIViewController(_ uiViewController: NotificationsViewController, context: Context) {}
 }
 #endif

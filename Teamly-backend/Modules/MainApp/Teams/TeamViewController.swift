@@ -84,6 +84,18 @@ class TeamViewController: UIViewController {
         return indicator
     }()
     
+    private let noResultsLabel: UILabel = {
+            let label = UILabel()
+            label.text = "This team doesn't exist"
+            label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+            label.textColor = .systemGray
+            label.textAlignment = .center
+            label.numberOfLines = 2
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.isHidden = true
+            return label
+        }()
+    
     // MARK: - Properties
     private var teams: [TeamWithSport] = []
     
@@ -91,6 +103,8 @@ class TeamViewController: UIViewController {
     private var supabase: SupabaseClient {
         return SupabaseManager.shared.client
     }
+
+    private var filteredTeams: [TeamWithSport] = []
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -141,6 +155,7 @@ class TeamViewController: UIViewController {
         view.addSubview(descriptionLabel)
         view.addSubview(createButton)
         view.addSubview(teamsStackView)
+        view.addSubview(noResultsLabel)
         
         NSLayoutConstraint.activate([
             // Top Green Tint
@@ -180,8 +195,14 @@ class TeamViewController: UIViewController {
             createButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -30),
             createButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             createButton.widthAnchor.constraint(equalToConstant: 120),
-            createButton.heightAnchor.constraint(equalToConstant: 44)
+            createButton.heightAnchor.constraint(equalToConstant: 44),
+            
+            noResultsLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            noResultsLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
+            noResultsLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
+            noResultsLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
         ])
+        searchBar.delegate = self
     }
     
     private func setupActions() {
@@ -253,92 +274,99 @@ class TeamViewController: UIViewController {
     
     // MARK: - Data Loading
     private func loadUserTeams() {
-        loadingIndicator.startAnimating()
-        
-        Task {
-            do {
-                // Get current user ID from Supabase auth session (async)
-                let session = try await supabase.auth.session
-                let userId = session.user.id
-                
-                // Step 1: Fetch team memberships for current user
-                let teamMemberships: [TeamMember] = try await supabase
-                    .from("team_members")
-                    .select()
-                    .eq("user_id", value: userId.uuidString.lowercased())
-                    .execute()
-                    .value
-                
-                if teamMemberships.isEmpty {
-                    await MainActor.run {
-                        showEmptyState()
+            loadingIndicator.startAnimating()
+            
+            Task {
+                do {
+                    // Get current user ID from Supabase auth session (async)
+                    let session = try await supabase.auth.session
+                    let userId = session.user.id
+                    
+                    // Step 1: Fetch team memberships for current user
+                    let teamMemberships: [TeamMember] = try await supabase
+                        .from("team_members")
+                        .select()
+                        .eq("user_id", value: userId.uuidString.lowercased())
+                        .execute()
+                        .value
+                    
+                    if teamMemberships.isEmpty {
+                        await MainActor.run {
+                            showEmptyState()
+                            self.filteredTeams = []
+                            self.teams = []
+                        }
+                        return
                     }
-                    return
-                }
-                
-                // Step 2: Get team IDs from memberships
-                let teamIds = teamMemberships.map { $0.team_id }
-                
-                // Step 3: Fetch teams data with sport emoji using a join
-                let response: [TeamWithSport] = try await supabase
-                    .from("teams")
-                    .select("""
-                        id,
-                        name,
-                        sport_id,
-                        college_id,
-                        captain_id,
-                        created_at,
-                        sports:sport_id (
+                    
+                    // Step 2: Get team IDs from memberships
+                    let teamIds = teamMemberships.map { $0.team_id }
+                    
+                    // Step 3: Fetch teams data with sport emoji using a join
+                    let response: [TeamWithSport] = try await supabase
+                        .from("teams")
+                        .select("""
                             id,
                             name,
-                            emoji
-                        )
-                    """)
-                    .in("id", values: teamIds)
-                    .execute()
-                    .value
-                
-                await MainActor.run {
-                    self.teams = response
-                    self.displayTeams(response)
-                }
-                
-            } catch {
-                print("Error loading teams: \(error)")
-                await MainActor.run {
-                    showErrorState()
+                            sport_id,
+                            college_id,
+                            captain_id,
+                            created_at,
+                            sports:sport_id (
+                                id,
+                                name,
+                                emoji
+                            )
+                        """)
+                        .in("id", values: teamIds)
+                        .execute()
+                        .value
+                    
+                    await MainActor.run {
+                        self.teams = response
+                        self.filteredTeams = response // Initialize filtered teams with all teams
+                        self.displayTeams(response)
+                    }
+                    
+                } catch {
+                    print("Error loading teams: \(error)")
+                    await MainActor.run {
+                        showErrorState()
+                        self.filteredTeams = []
+                        self.teams = []
+                    }
                 }
             }
+        }
+        
+        private func displayTeams(_ teams: [TeamWithSport]) {
+            // Clear existing team buttons
+            teamsStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
             
-        }
-    }
-    
-    private func displayTeams(_ teams: [TeamWithSport]) {
-        // Clear existing team buttons
-        teamsStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        if teams.isEmpty {
-            showEmptyState()
-            return
-        }
-        
-        // Show teams UI
-        loadingIndicator.stopAnimating()
-        centerIcon.isHidden = true
-        descriptionLabel.isHidden = true
-        teamsStackView.isHidden = false
-        searchBar.isHidden = false
-        
-        // Create button for each team
-        for (index, team) in teams.enumerated() {
-            let teamButton = createTeamButton(for: team, index: index)
-            teamsStackView.addArrangedSubview(teamButton)
+            // Hide no results label
+            noResultsLabel.isHidden = true
             
-            // Add height constraint
-            teamButton.heightAnchor.constraint(equalToConstant: 60).isActive = true
+            if teams.isEmpty {
+                showEmptyState()
+                return
+            }
+            
+            // Show teams UI
+            loadingIndicator.stopAnimating()
+            centerIcon.isHidden = true
+            descriptionLabel.isHidden = true
+            teamsStackView.isHidden = false
+            searchBar.isHidden = false
+            
+            // Create button for each team
+            for (index, team) in teams.enumerated() {
+                let teamButton = createTeamButton(for: team, index: index)
+                teamsStackView.addArrangedSubview(teamButton)
+                
+                // Add height constraint
+                teamButton.heightAnchor.constraint(equalToConstant: 60).isActive = true
+            }
         }
-    }
     
     private func createTeamButton(for team: TeamWithSport, index: Int) -> UIButton {
         let button = UIButton(type: .system)
@@ -370,13 +398,14 @@ class TeamViewController: UIViewController {
     }
     
     private func showEmptyState() {
-        loadingIndicator.stopAnimating()
-        centerIcon.isHidden = false
-        descriptionLabel.isHidden = false
-        teamsStackView.isHidden = true
-        searchBar.isHidden = true
-        createButton.isHidden = false
-    }
+            loadingIndicator.stopAnimating()
+            centerIcon.isHidden = false
+            descriptionLabel.isHidden = false
+            teamsStackView.isHidden = true
+            searchBar.isHidden = true
+            createButton.isHidden = false
+            noResultsLabel.isHidden = true
+        }
     
     private func showErrorState() {
         loadingIndicator.stopAnimating() 
@@ -405,6 +434,34 @@ class TeamViewController: UIViewController {
         showEmptyState()
     }
     
+    // MARK: - Search Filtering
+        private func filterTeams(with searchText: String) {
+            if searchText.isEmpty {
+                // If search is empty, show all teams
+                filteredTeams = teams
+                displayTeams(filteredTeams)
+                noResultsLabel.isHidden = true
+            } else {
+                // Filter teams whose names start with the search text (case insensitive)
+                filteredTeams = teams.filter { team in
+                    team.name.lowercased().hasPrefix(searchText.lowercased())
+                }
+                
+                if filteredTeams.isEmpty {
+                    // No results found - show the "This team doesn't exist" label
+                    teamsStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+                    teamsStackView.isHidden = false
+                    centerIcon.isHidden = true
+                    descriptionLabel.isHidden = true
+                    noResultsLabel.isHidden = false
+                } else {
+                    // Show filtered results
+                    displayTeams(filteredTeams)
+                    noResultsLabel.isHidden = true
+                }
+            }
+        }
+    
     // MARK: - Actions
     @objc private func createButtonTapped() {
         let createTeamVC = CreateTeamViewController()
@@ -424,15 +481,15 @@ class TeamViewController: UIViewController {
     }
         
     @objc private func teamButtonTapped(_ sender: UIButton) {
-        let teamIndex = sender.tag
-        guard teamIndex < teams.count else { return }
-        
-        let selectedTeam = teams[teamIndex]
+            let teamIndex = sender.tag
+            guard teamIndex < filteredTeams.count else { return } // Use filteredTeams instead of teams
+            
+            let selectedTeam = filteredTeams[teamIndex] // Use filteredTeams
 
-        Task {
-            await loadTeamDetails(teamId: selectedTeam.id)
+            Task {
+                await loadTeamDetails(teamId: selectedTeam.id)
+            }
         }
-    }
 
     private func loadTeamDetails(teamId: UUID) async {
         do {
@@ -496,6 +553,9 @@ class TeamViewController: UIViewController {
         // Reload teams after creating a new one
         loadUserTeams()
         
+        searchBar.text = ""
+        searchBar.resignFirstResponder()
+        
         // Show success feedback
         let successLabel = UILabel()
         successLabel.text = "Team created successfully!"
@@ -524,6 +584,23 @@ class TeamViewController: UIViewController {
                 }
             }
         }
+    }
+}
+
+// MARK: - UISearchBarDelegate
+extension TeamViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        filterTeams(with: searchText)
+    }
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.resignFirstResponder()
+    }
+    
+    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.text = ""
+        filterTeams(with: "")
+        searchBar.resignFirstResponder()
     }
 }
 

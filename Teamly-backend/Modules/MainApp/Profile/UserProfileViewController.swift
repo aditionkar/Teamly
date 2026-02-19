@@ -69,37 +69,27 @@ class UserProfileViewController: UIViewController {
     }()
     
     // MARK: - Updated Avatar View (similar to ProfileViewController)
-    private lazy var avatarView: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
+    private lazy var avatarView: UIButton = {
+        let button = UIButton()
+        button.translatesAutoresizingMaskIntoConstraints = false
         
-        // Create UIImageView for the avatar
-        let imageView = UIImageView()
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.contentMode = .scaleAspectFill
-        imageView.clipsToBounds = true
+        // Set default person.fill image WITHOUT any tint configuration
+        let config = UIImage.SymbolConfiguration(pointSize: 36)
+        if let image = UIImage(systemName: "person.fill", withConfiguration: config) {
+            button.setImage(image, for: .normal)
+        }
         
-        // Set default person.fill image
-        let config = UIImage.SymbolConfiguration(pointSize: 45)
-        imageView.image = UIImage(systemName: "person.fill", withConfiguration: config)
+        button.layer.cornerRadius = 43
+        button.clipsToBounds = true
+        button.isUserInteractionEnabled = false
+        button.layer.borderWidth = 1.0
+        button.imageView?.contentMode = .scaleAspectFill
         
-        view.addSubview(imageView)
+        // Set the tint color directly on the button
+        let isDarkMode = traitCollection.userInterfaceStyle == .dark
+        button.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
         
-        NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: view.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        
-        view.layer.cornerRadius = 43
-        view.clipsToBounds = true
-        view.layer.borderWidth = 1.0
-        
-        // Store reference to imageView for later updates
-        self.avatarImageView = imageView
-        
-        return view
+        return button
     }()
     
     // Reference to the image view inside avatarView
@@ -870,11 +860,7 @@ class UserProfileViewController: UIViewController {
         avatarView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         avatarView.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark.withAlphaComponent(0.5) : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
         
-        // Only tint the image if it's the default person.fill (not a real profile picture)
-        if let image = avatarImageView.image,
-           image == UIImage(systemName: "person.fill") {
-            avatarImageView.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
-        }
+        avatarView.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
         
         // Update labels
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack

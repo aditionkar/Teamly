@@ -65,8 +65,8 @@ class ProfileViewController: UIViewController {
         let button = UIButton()
         button.translatesAutoresizingMaskIntoConstraints = false
         
-        // Set default person.fill image
-        let config = UIImage.SymbolConfiguration(pointSize: 45)
+        // Set default person.fill image WITHOUT any tint configuration
+        let config = UIImage.SymbolConfiguration(pointSize: 36)
         if let image = UIImage(systemName: "person.fill", withConfiguration: config) {
             button.setImage(image, for: .normal)
         }
@@ -76,6 +76,11 @@ class ProfileViewController: UIViewController {
         button.isUserInteractionEnabled = false
         button.layer.borderWidth = 1.0
         button.imageView?.contentMode = .scaleAspectFill
+        
+        // Set the tint color directly on the button
+        let isDarkMode = traitCollection.userInterfaceStyle == .dark
+        button.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
+        
         return button
     }()
     
@@ -661,12 +666,7 @@ class ProfileViewController: UIViewController {
         avatarButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         avatarButton.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark.withAlphaComponent(0.5) : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
         
-        // Only tint the image if it's the default person.fill (not a real profile picture)
-        if let image = avatarButton.image(for: .normal),
-           image == UIImage(systemName: "person.fill") {
-            let tintColor = isDarkMode ? UIColor.quaternaryLight : .quaternaryDark
-            avatarButton.setImage(image.withTintColor(tintColor, renderingMode: .alwaysOriginal), for: .normal)
-        }
+        avatarButton.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
         
         // Update name, age, gender labels
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack

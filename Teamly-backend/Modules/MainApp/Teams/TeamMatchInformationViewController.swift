@@ -376,7 +376,12 @@ class TeamMatchInformationViewController: UIViewController {
             // 2. Fetch RSVP players with their profiles
             rsvpPlayers = try await fetchRSVPPlayers(for: match)
             
-            // 3. Create host player object
+            // 3. Update the match object with the actual RSVP count
+            // The +1 is because the host is not in RSVP table but is always going
+            var updatedMatch = match
+            updatedMatch.playersRSVPed = rsvpPlayers.count
+            
+            // 4. Create host player object
             var hostPlayer: PlayerWithProfile?
             if let hostProfile = hostProfile {
                 // Check if host is friend of current user
@@ -391,7 +396,7 @@ class TeamMatchInformationViewController: UIViewController {
                 )
             }
             
-            // 4. Combine host + RSVP players (host at the top)
+            // 5. Combine host + RSVP players (host at the top)
             if let hostPlayer = hostPlayer {
                 let hostHasRSVPed = rsvpPlayers.contains { $0.userId.uuidString == hostPlayer.userId.uuidString }
                 
@@ -414,13 +419,15 @@ class TeamMatchInformationViewController: UIViewController {
                 allPlayers = rsvpPlayers
             }
 
-            // 5. Sort so current user ("You") always appears first
+            // 6. Sort so current user ("You") always appears first
             allPlayers.sort { lhs, _ in
                 lhs.userId.uuidString == currentUserId
             }
 
-            // 6. Update UI with all fetched data
+            // 7. Update UI with all fetched data
             await MainActor.run {
+                // Update the match property with the updated match object
+                self.match = updatedMatch
                 self.displayMatchInfo()
                 self.loadingIndicator.stopAnimating()
             }

@@ -526,55 +526,139 @@ class AddPlayersViewController: UIViewController {
     }
     
     @objc private func addButtonTapped() {
-            guard let team = team else { return }
-            
-            let selectedFriends = allFriends.filter { selectedUserIds.contains($0.id) }
-            
-            Task {
-                do {
-                    // Add each selected friend to team_members
-                    for friend in selectedFriends {
-                        // Fix 4: Use a proper Codable struct instead of [String: Any]
-                        let newMember = NewTeamMember(
-                            team_id: team.id,
-                            user_id: friend.id
-                        )
-                        
-                        try await supabase
-                            .from("team_members")
-                            .insert(newMember)
-                            .execute()
-
+        guard let team = team else { return }
+        
+        let selectedFriends = allFriends.filter { selectedUserIds.contains($0.id) }
+        
+        Task {
+            do {
+                // Get current user's name for the notification message
+                let currentUserId = try await supabase.auth.session.user.id
+                
+                // Fetch current user's profile to get their name
+                struct ProfileInfo: Codable {
+                    let name: String?
+                }
+                
+                let userProfile: ProfileInfo? = try? await supabase
+                    .from("profiles")
+                    .select("name")
+                    .eq("id", value: currentUserId)
+                    .single()
+                    .execute()
+                    .value
+                
+                let senderName = userProfile?.name ?? "Someone"
+                
+                // Send invitations to each selected friend
+                for friend in selectedFriends {
+                    try await sendTeamInvitationNotification(
+                        senderId: currentUserId,
+                        senderName: senderName,
+                        receiverId: friend.id,
+                        teamName: team.name,
+                        sportName: "their" // You might want to fetch the sport name if available
+                    )
+                }
+                
+                // Show success message
+                await MainActor.run {
+                    if selectedFriends.count == 1 {
+                        showSuccessMessage("Invitation sent to \(selectedFriends.first?.displayName ?? "player")!")
+                    } else {
+                        showSuccessMessage("Invitations sent to \(selectedFriends.count) players!")
                     }
                     
-                    // Show success message
-                    await MainActor.run {
-                        if selectedFriends.count == 1 {
-                            showSuccessMessage("\(selectedFriends.first?.displayName ?? "Player") added to team!")
-                        } else {
-                            showSuccessMessage("\(selectedFriends.count) players added to team!")
-                        }
-                        
-                        // Clear selection and refresh
-                        selectedUserIds.removeAll()
-                        updateAddButtonAppearance()
-                        
-                        // Remove added friends from the list
-                        let addedFriendIds = Set(selectedFriends.map { $0.id })
-                        allFriends = allFriends.filter { !addedFriendIds.contains($0.id) }
-                        filteredFriends = allFriends
-                        playersTableView.reloadData()
-                        updateEmptyState()
-                    }
+                    // Clear selection
+                    selectedUserIds.removeAll()
+                    updateAddButtonAppearance()
                     
-                } catch {
-                    print("Error adding players: \(error)")
-                    await MainActor.run {
-                        showError(message: "Failed to add players. Please try again.")
+                    // Remove invited friends from the list or mark them as invited
+                    // Option 1: Remove them completely
+                    let invitedFriendIds = Set(selectedFriends.map { $0.id })
+                    allFriends = allFriends.filter { !invitedFriendIds.contains($0.id) }
+                    filteredFriends = allFriends
+                    
+                    // Option 2: Keep them but show they've been invited (you'd need to add an invited state)
+                    // For this option, you'd need to track invited friends separately
+                    
+                    playersTableView.reloadData()
+                    updateEmptyState()
+                    
+                    // Update empty state message if needed
+                    if allFriends.isEmpty {
+                        emptyStateLabel.text = "No more friends to invite"
                     }
+                }
+                
+            } catch {
+                print("Error sending invitations: \(error)")
+                await MainActor.run {
+                    showError(message: "Failed to send invitations. Please try again.")
                 }
             }
         }
+    }
+
+    // MARK: - Notification Methods
+    private func sendTeamInvitationNotification(senderId: UUID, senderName: String, receiverId: UUID, teamName: String, sportName: String) async throws {
+        
+        let message = "\(senderName) has invited you to join their team \(teamName)"
+        
+        // Create notification using a proper struct
+        struct NewNotification: Codable {
+            let sender_id: String
+            let receiver_id: String
+            let type: String
+            let message: String
+            // Add any additional fields your notifications table might have
+            // let team_id: String? // If you want to include team reference
+        }
+        
+        let notification = NewNotification(
+            sender_id: senderId.uuidString,
+            receiver_id: receiverId.uuidString,
+            type: "team_invitation",
+            message: message
+        )
+        
+        // Insert notification
+        try await supabase
+            .from("notifications")
+            .insert(notification)
+            .execute()
+        
+        print("✅ Team invitation notification sent to \(receiverId)")
+    }
+
+    // Optional: If you want to include team_id in the notification
+    private func sendTeamInvitationNotificationWithTeamId(senderId: UUID, senderName: String, receiverId: UUID, teamId: UUID, teamName: String) async throws {
+        
+        let message = "\(senderName) has invited you to join their team \(teamName)"
+        
+        struct NewNotificationWithTeam: Codable {
+            let sender_id: String
+            let receiver_id: String
+            let type: String
+            let message: String
+            let team_id: String
+        }
+        
+        let notification = NewNotificationWithTeam(
+            sender_id: senderId.uuidString,
+            receiver_id: receiverId.uuidString,
+            type: "team_invitation",
+            message: message,
+            team_id: teamId.uuidString
+        )
+        
+        try await supabase
+            .from("notifications")
+            .insert(notification)
+            .execute()
+        
+        print("✅ Team invitation notification with team ID sent to \(receiverId)")
+    }
     
     
     
