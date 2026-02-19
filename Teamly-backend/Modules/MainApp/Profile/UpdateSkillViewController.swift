@@ -2,12 +2,7 @@
 //  UpdateSkillViewController.swift
 //  Teamly-backend
 //
-//  Created by admin20 on 19/02/26.
-//
-
-//
-//  UpdateSkillViewController.swift
-//  Teamly-backend
+//  Created by user@37 on 19/02/26.
 //
 
 import UIKit
@@ -72,13 +67,13 @@ class UpdateSkillViewController: UIViewController {
         return label
     }()
 
-    private let sportNameLabel: UILabel = {
-        let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
+//    private let sportNameLabel: UILabel = {
+//        let label = UILabel()
+//        label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+//        label.textAlignment = .center
+//        label.translatesAutoresizingMaskIntoConstraints = false
+//        return label
+//    }()
 
     private let sliderContentContainer: UIView = {
         let view = UIView()
@@ -173,7 +168,7 @@ class UpdateSkillViewController: UIViewController {
         titleStackView.addArrangedSubview(infoButton)
         view.addSubview(titleStackView)
         view.addSubview(sportEmojiLabel)
-        view.addSubview(sportNameLabel)
+        //view.addSubview(sportNameLabel)
         view.addSubview(sliderContentContainer)
         sliderContentContainer.addSubview(verticalSlider)
         sliderContentContainer.addSubview(skillLevelMarkersStackView)
@@ -201,11 +196,11 @@ class UpdateSkillViewController: UIViewController {
             sportEmojiLabel.topAnchor.constraint(equalTo: titleStackView.bottomAnchor, constant: 10),
             sportEmojiLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            sportNameLabel.topAnchor.constraint(equalTo: sportEmojiLabel.bottomAnchor, constant: 4),
-            sportNameLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+//            sportNameLabel.topAnchor.constraint(equalTo: sportEmojiLabel.bottomAnchor, constant: 4),
+//            sportNameLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             sliderContentContainer.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            sliderContentContainer.topAnchor.constraint(equalTo: sportNameLabel.bottomAnchor, constant: 20),
+            sliderContentContainer.topAnchor.constraint(equalTo: sportEmojiLabel.bottomAnchor, constant: 20),
             sliderContentContainer.widthAnchor.constraint(equalToConstant: 250),
             sliderContentContainer.heightAnchor.constraint(equalToConstant: 420),
 
@@ -274,7 +269,7 @@ class UpdateSkillViewController: UIViewController {
         let sport = sports[currentIndex]
 
         sportEmojiLabel.text = sport.emoji ?? "🏃"
-        sportNameLabel.text = sport.name
+        //sportNameLabel.text = sport.name
 
         // Pre-select current skill level
         if let index = skillLevels.firstIndex(of: sport.skill_level) {
@@ -297,7 +292,7 @@ class UpdateSkillViewController: UIViewController {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
         view.backgroundColor = isDarkMode ? .primaryBlack : .primaryWhite
         titleLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        sportNameLabel.textColor = isDarkMode ? UIColor.primaryWhite.withAlphaComponent(0.6) : UIColor.primaryBlack.withAlphaComponent(0.6)
+      //  sportNameLabel.textColor = isDarkMode ? UIColor.primaryWhite.withAlphaComponent(0.6) : UIColor.primaryBlack.withAlphaComponent(0.6)
         infoButton.tintColor = isDarkMode ? .primaryWhite : .primaryBlack
         updateMarkerColors()
     }

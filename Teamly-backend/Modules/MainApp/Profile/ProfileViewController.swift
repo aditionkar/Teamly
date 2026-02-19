@@ -62,27 +62,27 @@ class ProfileViewController: UIViewController {
     }()
     
     private lazy var avatarButton: UIButton = {
-        let button = UIButton()
-        button.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Set default person.fill image WITHOUT any tint configuration
-        let config = UIImage.SymbolConfiguration(pointSize: 36)
-        if let image = UIImage(systemName: "person.fill", withConfiguration: config) {
-            button.setImage(image, for: .normal)
-        }
-        
-        button.layer.cornerRadius = 43
-        button.clipsToBounds = true
-        button.isUserInteractionEnabled = false
-        button.layer.borderWidth = 1.0
-        button.imageView?.contentMode = .scaleAspectFill
-        
-        // Set the tint color directly on the button
-        let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        button.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
-        
-        return button
-    }()
+            let button = UIButton()
+            button.translatesAutoresizingMaskIntoConstraints = false
+            
+            // Set default person.fill image WITHOUT any tint configuration
+            let config = UIImage.SymbolConfiguration(pointSize: 36)
+            if let image = UIImage(systemName: "person.fill", withConfiguration: config) {
+                button.setImage(image, for: .normal)
+            }
+            
+            button.layer.cornerRadius = 43
+            button.clipsToBounds = true
+            button.isUserInteractionEnabled = false
+            button.layer.borderWidth = 1.0
+            button.imageView?.contentMode = .scaleAspectFill
+            
+            // Set the tint color directly on the button
+            let isDarkMode = traitCollection.userInterfaceStyle == .dark
+            button.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
+            
+            return button
+        }()
     
     private let nameLabel: UILabel = {
         let label = UILabel()
@@ -247,10 +247,30 @@ class ProfileViewController: UIViewController {
     }
     
     // MARK: - Actions
+
+    // ── CHANGED: presents EditProfileViewController as a sheet ──────────────
     @objc private func editButtonTapped() {
-        // TODO: Implement edit profile functionality
-        print("Edit button tapped")
+        let editVC = EditProfileViewController()
+        editVC.currentAvatarImage = avatarButton.image(for: .normal)
+        editVC.currentName = userProfile?.name
+        editVC.currentGender = userProfile?.gender
+        editVC.currentAge = userProfile?.age
+        editVC.currentSports = userSports
+        editVC.existingSportIds = userSports.map { $0.id }
+        editVC.currentUserId = currentUserId
+        editVC.onProfileUpdated = { [weak self] in
+            Task { await self?.fetchUserProfileData() }
+        }
+
+        if let sheet = editVC.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 24
+        }
+
+        present(editVC, animated: true)
     }
+    // ────────────────────────────────────────────────────────────────────────
     
     @objc private func logoutButtonTapped() {
         let alert = UIAlertController(
@@ -663,10 +683,10 @@ class ProfileViewController: UIViewController {
         editButton.setTitleColor(isDarkMode ? .systemGreenDark : .systemGreen, for: .normal)
         
         // Update avatar button colors
-        avatarButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        avatarButton.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark.withAlphaComponent(0.5) : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-        
-        avatarButton.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
+                avatarButton.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+                avatarButton.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark.withAlphaComponent(0.5) : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
+                
+                avatarButton.tintColor = isDarkMode ? .quaternaryLight : .quaternaryDark
         
         // Update name, age, gender labels
         nameLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack

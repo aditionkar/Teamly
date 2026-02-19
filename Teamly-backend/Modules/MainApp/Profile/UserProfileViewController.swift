@@ -470,15 +470,15 @@ class UserProfileViewController: UIViewController {
             }
             
             await MainActor.run {
-                // Update the image view with the downloaded image
-                avatarImageView.image = image
-                avatarImageView.contentMode = .scaleAspectFill
-                avatarImageView.tintColor = .clear
+                // Update the button's image directly
+                self.avatarView.setImage(image, for: .normal)
+                self.avatarView.imageView?.contentMode = .scaleAspectFill
+                self.avatarView.tintColor = .clear
                 
                 // Update border colors
-                let isDarkMode = traitCollection.userInterfaceStyle == .dark
-                avatarView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-                avatarView.layer.borderColor = (isDarkMode ?
+                let isDarkMode = self.traitCollection.userInterfaceStyle == .dark
+                self.avatarView.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
+                self.avatarView.layer.borderColor = (isDarkMode ?
                     UIColor.tertiaryDark.withAlphaComponent(0.5) :
                     UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
             }

@@ -2,12 +2,7 @@
 //  NewSportSkillViewController.swift
 //  Teamly-backend
 //
-//  Created by admin20 on 19/02/26.
-//
-
-//
-//  NewSportSkillViewController.swift
-//  Teamly-backend
+//  Created by user@37 on 19/02/26.
 //
 
 import UIKit
