@@ -6,9 +6,7 @@
 //
 
 import UIKit
-
 import Supabase
-
 
 class CollegeVerificationViewController: UIViewController {
     
@@ -41,8 +39,8 @@ class CollegeVerificationViewController: UIViewController {
         let textField = UITextField()
         textField.font = UIFont.systemFont(ofSize: 18)
         textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.autocapitalizationType = .none // ← ADD THIS LINE
-        textField.autocorrectionType = .no // ← ALSO ADD THIS TO PREVENT AUTO-CORRECTION
+        textField.autocapitalizationType = .none
+        textField.autocorrectionType = .no
         
         let paddingView = UIView(frame: CGRect(x: 0, y: 0, width: 20, height: 50))
         textField.leftView = paddingView
@@ -58,7 +56,8 @@ class CollegeVerificationViewController: UIViewController {
         view.clipsToBounds = true
         view.frame = view.bounds
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.layer.borderWidth = 0.7
+        view.layer.borderWidth = 1.0 // Slightly thicker border for better visibility
+        view.layer.borderColor = UIColor.clear.cgColor // Start with no border
         
         return view
     }()
@@ -77,8 +76,6 @@ class CollegeVerificationViewController: UIViewController {
         return button
     }()
     
-    
-    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -86,6 +83,9 @@ class CollegeVerificationViewController: UIViewController {
         setupConstraints()
         setupActions()
         updateColors()
+        
+        // Set initial validation state
+        updateEmailValidation()
     }
     
     override func viewDidLayoutSubviews() {
@@ -159,7 +159,7 @@ class CollegeVerificationViewController: UIViewController {
             titleLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             
             // Email Text Field Container
-            emailTextFieldContainer.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 100),
+            emailTextFieldContainer.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 50),
             emailTextFieldContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 40),
             emailTextFieldContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -40),
             emailTextFieldContainer.heightAnchor.constraint(equalToConstant: 50),
@@ -171,7 +171,7 @@ class CollegeVerificationViewController: UIViewController {
             emailTextField.bottomAnchor.constraint(equalTo: emailTextFieldContainer.bottomAnchor),
             
             // Send OTP Button
-            sendOTPButton.topAnchor.constraint(equalTo: emailTextFieldContainer.bottomAnchor, constant: 50),
+            sendOTPButton.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 30),
             sendOTPButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 120),
             sendOTPButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -120),
             sendOTPButton.heightAnchor.constraint(equalToConstant: 50),
@@ -191,16 +191,56 @@ class CollegeVerificationViewController: UIViewController {
     }
 
     @objc private func emailTextFieldDidChange() {
-        // Call the delegate method
         if let text = emailTextField.text {
             emailTextField.text = text.lowercased() // Auto lowercase
+            updateEmailValidation()
         }
-    }
-    @objc private func dismissKeyboard() {
-        view.endEditing(true)
     }
 
     
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+    
+    // MARK: - Email Validation
+    private func updateEmailValidation() {
+        guard let email = emailTextField.text, !email.isEmpty else {
+            // Empty field - no border
+            emailTextFieldContainer.layer.borderColor = UIColor.clear.cgColor
+            return
+        }
+        
+        // Check if the email contains an '@' symbol
+        if email.contains("@") {
+            // We have an '@' symbol, so validate the domain
+            if isValidForSelectedCollege(email) {
+                // Valid email - green border
+                emailTextFieldContainer.layer.borderColor = UIColor.systemGreen.cgColor
+            } else {
+                // Invalid domain - red border
+                emailTextFieldContainer.layer.borderColor = UIColor.systemRed.cgColor
+            }
+        } else {
+            // No '@' symbol yet - don't show any border
+            emailTextFieldContainer.layer.borderColor = UIColor.clear.cgColor
+        }
+    }
+    
+    private func isValidForSelectedCollege(_ email: String) -> Bool {
+        guard let college = selectedCollege else {
+            return false
+        }
+        
+        // For SRM University (id = 1), only accept @srmist.edu.in
+        if college.id == 1 {
+            return email.lowercased().hasSuffix("@srmist.edu.in")
+        }
+        
+        // For other colleges, you can add more validation rules here
+        return true
+    }
+    
+
     // MARK: - Color Updates
     private func updateColors() {
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
@@ -218,9 +258,9 @@ class CollegeVerificationViewController: UIViewController {
         )
         emailTextField.textColor = isDarkMode ? .primaryWhite : .primaryBlack
         
-        // Update text field container colors
+        // Update text field container colors (background only, border handled by validation)
         emailTextFieldContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        emailTextFieldContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
+        
     }
     
     private func updateGradientColors() {
@@ -255,6 +295,16 @@ class CollegeVerificationViewController: UIViewController {
         // Validate email format
         guard isValidEmail(email) else {
             showAlert(message: "Please enter a valid email address")
+            return
+        }
+        
+        // Validate against college domain
+        guard isValidForSelectedCollege(email) else {
+            if selectedCollege?.id == 1 {
+                showAlert(message: "Please use your SRM email address ending with @srmist.edu.in")
+            } else {
+                showAlert(message: "Please use your college email address")
+            }
             return
         }
 
@@ -294,7 +344,7 @@ class CollegeVerificationViewController: UIViewController {
 
                 let otpVC = CollegeVerificationOTPViewController()
                 otpVC.email = email
-                otpVC.selectedCollege = selectedCollege 
+                otpVC.selectedCollege = selectedCollege
                 otpVC.modalPresentationStyle = .fullScreen
                 otpVC.overrideUserInterfaceStyle = self.traitCollection.userInterfaceStyle
                 present(otpVC, animated: true)
@@ -315,11 +365,6 @@ class CollegeVerificationViewController: UIViewController {
                     print("  - Code: \(nsError.code)")
                     print("  - UserInfo: \(nsError.userInfo)")
                     
-                    // Check for Supabase specific error
-                    if nsError.domain == "Supabase" || nsError.domain.contains("Supabase") {
-                        print("  - This appears to be a Supabase error")
-                    }
-                    
                     // Check for network errors
                     if nsError.domain == NSURLErrorDomain {
                         switch nsError.code {
@@ -338,51 +383,12 @@ class CollegeVerificationViewController: UIViewController {
                     }
                 }
                 
-//                // Try to parse the error response if it's from Supabase
-//                if let functionError = error as? FunctionError {
-//                    print("FunctionError details:")
-//                    print("  - Status: \(functionError.status)")
-//                    print("  - Message: \(functionError.message)")
-//                    
-//                    showAlert(message: "Server error: \(functionError.message)")
-//                    return
-//                }
-                
                 // Show generic error message with debug info
-                showAlert(message: "Failed to send OTP. Please check:\n• Internet connection\n• College email domain\n• Try again later\n\nDebug: \(error.localizedDescription)")
+                showAlert(message: "Failed to send OTP. Please check:\n• Internet connection\n• Try again later\n\nDebug: \(error.localizedDescription)")
             }
         }
     }
 
-
-
-
-    
-    // MARK: - College Email Validation Helpers
-    private func validateEmailForCollege(email: String, collegeId: Int) -> Bool {
-        let domain = getCollegeDomain(collegeId: collegeId)
-        let emailLowercased = email.lowercased()
-        
-        // Check if email ends with the college domain
-        return emailLowercased.hasSuffix(domain)
-    }
-
-    private func getCollegeDomain(collegeId: Int) -> String {
-        // Map college IDs to their email domains
-        switch collegeId {
-        case 1: // SRM University
-            return "@srmist.edu.in"
-        // Add more colleges as needed:
-        // case 2: // VIT Chennai
-        //     return "@vit.ac.in"
-        // case 3: // Anna University
-        //     return "@annauniv.edu"
-        default:
-            // Default to SRM if not specified
-            return "@srmist.edu.in"
-        }
-    }
-    
     // MARK: - Helpers
     private func isValidEmail(_ email: String) -> Bool {
         let emailRegEx = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
@@ -400,16 +406,15 @@ class CollegeVerificationViewController: UIViewController {
     }
     
     // When verification is successful, call the callback
-        private func verificationSuccessful() {
-            // Dismiss and notify parent
-            dismiss(animated: true) {
-                self.onVerifySuccess?()
-            }
+    private func verificationSuccessful() {
+        // Dismiss and notify parent
+        dismiss(animated: true) {
+            self.onVerifySuccess?()
         }
+    }
 }
 
 // MARK: - UITextFieldDelegate
-// Add this method to your extension
 extension CollegeVerificationViewController: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         sendOTPTapped()
@@ -417,50 +422,17 @@ extension CollegeVerificationViewController: UITextFieldDelegate {
     }
     
     func textFieldDidChangeSelection(_ textField: UITextField) {
-        // Optional: Real-time validation UI feedback
-        if let email = textField.text, !email.isEmpty,
-           let college = selectedCollege {
-            let isValid = validateEmailForCollege(email: email, collegeId: college.id)
-            
-            // Change border color based on validation
-            if isValid {
-                emailTextFieldContainer.layer.borderColor = UIColor.systemGreen.cgColor
-            } else {
-                let isDarkMode = traitCollection.userInterfaceStyle == .dark
-                emailTextFieldContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-            }
-        }
-    }
-}
-
-// MARK: - SwiftUI Preview
-#if canImport(SwiftUI) && DEBUG
-import SwiftUI
-
-struct CollegeVerificationViewController_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            CollegeVerificationViewControllerRepresentable()
-                .edgesIgnoringSafeArea(.all)
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Mode")
-            
-            CollegeVerificationViewControllerRepresentable()
-                .edgesIgnoringSafeArea(.all)
-                .preferredColorScheme(.light)
-                .previewDisplayName("Light Mode")
-        }
-    }
-}
-
-struct CollegeVerificationViewControllerRepresentable: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> CollegeVerificationViewController {
-        return CollegeVerificationViewController()
+        // Real-time validation is already handled in emailTextFieldDidChange
+        // This is just for additional UI feedback if needed
     }
     
-    func updateUIViewController(_ uiViewController: CollegeVerificationViewController, context: Context) {
-        // No update needed
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        // Prevent uppercase letters
+        let lowercasedString = string.lowercased()
+        if string != lowercasedString {
+            textField.text = (textField.text as NSString?)?.replacingCharacters(in: range, with: lowercasedString)
+            return false
+        }
+        return true
     }
 }
-#endif
-
