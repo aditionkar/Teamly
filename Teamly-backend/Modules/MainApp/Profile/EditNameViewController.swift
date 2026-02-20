@@ -41,91 +41,6 @@ class EditNameViewController: UIViewController {
         return view
     }()
 
-    private let maleButton: UIButton = {
-        let button = UIButton()
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(named: "Male")
-        config.imagePadding = 10
-        button.configuration = config
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }()
-
-    private let maleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Male"
-        label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-
-    private let maleVerticalStack: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.spacing = 15
-        stackView.alignment = .center
-        stackView.distribution = .fill
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        return stackView
-    }()
-
-    private let maleButtonContainer: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.layer.cornerRadius = 35
-        view.clipsToBounds = true
-        view.layer.borderWidth = 0.7
-        return view
-    }()
-
-    private let femaleButton: UIButton = {
-        let button = UIButton()
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(named: "Female")
-        config.imagePadding = 10
-        button.configuration = config
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }()
-
-    private let femaleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Female"
-        label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-
-    private let femaleVerticalStack: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.spacing = 15
-        stackView.alignment = .center
-        stackView.distribution = .fill
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        return stackView
-    }()
-
-    private let femaleButtonContainer: UIView = {
-        let view = UIView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.layer.cornerRadius = 35
-        view.clipsToBounds = true
-        view.layer.borderWidth = 0.7
-        return view
-    }()
-
-    private let genderStackView: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .horizontal
-        stackView.spacing = 28
-        stackView.distribution = .fillEqually
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        return stackView
-    }()
-
     private let cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -155,8 +70,6 @@ class EditNameViewController: UIViewController {
 
     // MARK: - Properties
     var currentName: String?
-    var currentGender: String?
-    private var selectedGender: String?
     var onNameUpdated: (() -> Void)?
 
     // MARK: - Lifecycle
@@ -190,12 +103,6 @@ class EditNameViewController: UIViewController {
             nameTextField.text = name
         }
 
-        // Pre-select gender
-        if let gender = currentGender?.lowercased() {
-            selectedGender = gender
-            updateGenderSelection()
-        }
-
         updateSaveButtonState()
     }
 
@@ -209,19 +116,6 @@ class EditNameViewController: UIViewController {
         view.addSubview(cancelButton)
         view.addSubview(nameTextFieldContainer)
         nameTextFieldContainer.addSubview(nameTextField)
-
-        maleVerticalStack.addArrangedSubview(maleButton)
-        maleVerticalStack.addArrangedSubview(maleLabel)
-        maleButtonContainer.addSubview(maleVerticalStack)
-
-        femaleVerticalStack.addArrangedSubview(femaleButton)
-        femaleVerticalStack.addArrangedSubview(femaleLabel)
-        femaleButtonContainer.addSubview(femaleVerticalStack)
-
-        genderStackView.addArrangedSubview(maleButtonContainer)
-        genderStackView.addArrangedSubview(femaleButtonContainer)
-
-        view.addSubview(genderStackView)
         view.addSubview(saveButton)
     }
 
@@ -230,7 +124,7 @@ class EditNameViewController: UIViewController {
             topGreenTint.topAnchor.constraint(equalTo: view.topAnchor),
             topGreenTint.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topGreenTint.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topGreenTint.bottomAnchor.constraint(equalTo: genderStackView.bottomAnchor, constant: 50),
+            topGreenTint.bottomAnchor.constraint(equalTo: view.centerYAnchor, constant: 100),
 
             // Cancel (X) button — top right
             cancelButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
@@ -238,8 +132,8 @@ class EditNameViewController: UIViewController {
             cancelButton.widthAnchor.constraint(equalToConstant: 34),
             cancelButton.heightAnchor.constraint(equalToConstant: 34),
 
-            // Name field
-            nameTextFieldContainer.topAnchor.constraint(equalTo: cancelButton.bottomAnchor, constant: 120),
+            // Name field - centered vertically
+            nameTextFieldContainer.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             nameTextFieldContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             nameTextFieldContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             nameTextFieldContainer.heightAnchor.constraint(equalToConstant: 50),
@@ -248,25 +142,6 @@ class EditNameViewController: UIViewController {
             nameTextField.leadingAnchor.constraint(equalTo: nameTextFieldContainer.leadingAnchor),
             nameTextField.trailingAnchor.constraint(equalTo: nameTextFieldContainer.trailingAnchor),
             nameTextField.bottomAnchor.constraint(equalTo: nameTextFieldContainer.bottomAnchor),
-
-            // Gender stack
-            genderStackView.topAnchor.constraint(equalTo: nameTextFieldContainer.bottomAnchor, constant: 60),
-            genderStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            genderStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
-            genderStackView.heightAnchor.constraint(equalToConstant: 140),
-
-            maleButtonContainer.widthAnchor.constraint(equalToConstant: 120),
-            femaleButtonContainer.widthAnchor.constraint(equalToConstant: 120),
-
-            maleVerticalStack.centerXAnchor.constraint(equalTo: maleButtonContainer.centerXAnchor),
-            maleVerticalStack.centerYAnchor.constraint(equalTo: maleButtonContainer.centerYAnchor),
-            maleVerticalStack.leadingAnchor.constraint(equalTo: maleButtonContainer.leadingAnchor, constant: 8),
-            maleVerticalStack.trailingAnchor.constraint(equalTo: maleButtonContainer.trailingAnchor, constant: -8),
-
-            femaleVerticalStack.centerXAnchor.constraint(equalTo: femaleButtonContainer.centerXAnchor),
-            femaleVerticalStack.centerYAnchor.constraint(equalTo: femaleButtonContainer.centerYAnchor),
-            femaleVerticalStack.leadingAnchor.constraint(equalTo: femaleButtonContainer.leadingAnchor, constant: 8),
-            femaleVerticalStack.trailingAnchor.constraint(equalTo: femaleButtonContainer.trailingAnchor, constant: -8),
 
             // Save button
             saveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -30),
@@ -278,8 +153,6 @@ class EditNameViewController: UIViewController {
 
     private func setupActions() {
         nameTextField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
-        maleButton.addTarget(self, action: #selector(maleButtonTapped), for: .touchUpInside)
-        femaleButton.addTarget(self, action: #selector(femaleButtonTapped), for: .touchUpInside)
         saveButton.addTarget(self, action: #selector(saveButtonTapped), for: .touchUpInside)
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
     }
@@ -298,16 +171,6 @@ class EditNameViewController: UIViewController {
 
         nameTextFieldContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
         nameTextFieldContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight).cgColor
-
-        maleButtonContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        femaleButtonContainer.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        maleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-        femaleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight.withAlphaComponent(0.5)).cgColor
-
-        maleLabel.textColor = isDarkMode ? UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1) : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1)
-        femaleLabel.textColor = isDarkMode ? UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1) : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1)
-
-        updateGenderSelection()
     }
 
     private func updateGradientColors() {
@@ -327,18 +190,6 @@ class EditNameViewController: UIViewController {
         updateSaveButtonState()
     }
 
-    @objc private func maleButtonTapped() {
-        selectedGender = "male"
-        updateGenderSelection()
-        updateSaveButtonState()
-    }
-
-    @objc private func femaleButtonTapped() {
-        selectedGender = "female"
-        updateGenderSelection()
-        updateSaveButtonState()
-    }
-
     @objc private func cancelTapped() {
         if let nav = navigationController {
             if nav.viewControllers.count > 1 {
@@ -353,8 +204,7 @@ class EditNameViewController: UIViewController {
 
     @objc private func saveButtonTapped() {
         guard let name = nameTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty,
-              let gender = selectedGender else { return }
+              !name.isEmpty else { return }
 
         let loader = UIActivityIndicatorView(style: .medium)
         loader.center = view.center
@@ -369,7 +219,7 @@ class EditNameViewController: UIViewController {
 
                 try await SupabaseManager.shared.client
                     .from("profiles")
-                    .update(["name": name, "gender": gender.capitalized])
+                    .update(["name": name])
                     .eq("id", value: userId.uuidString)
                     .execute()
 
@@ -398,23 +248,8 @@ class EditNameViewController: UIViewController {
     }
 
     // MARK: - Helpers
-    private func updateGenderSelection() {
-        let isDarkMode = traitCollection.userInterfaceStyle == .dark
-
-        maleButtonContainer.layer.borderWidth = isDarkMode ? 0.7 : 0.9
-        femaleButtonContainer.layer.borderWidth = isDarkMode ? 0.7 : 0.9
-        maleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight).cgColor
-        femaleButtonContainer.layer.borderColor = (isDarkMode ? UIColor.tertiaryDark : UIColor.tertiaryLight).cgColor
-
-        if selectedGender == "male" {
-            maleButtonContainer.layer.borderColor = UIColor.systemGreen.cgColor
-        } else if selectedGender == "female" {
-            femaleButtonContainer.layer.borderColor = UIColor.systemGreen.cgColor
-        }
-    }
-
     private func updateSaveButtonState() {
         let isNameNotEmpty = !(nameTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-        saveButton.isEnabled = isNameNotEmpty && selectedGender != nil
+        saveButton.isEnabled = isNameNotEmpty
     }
 }

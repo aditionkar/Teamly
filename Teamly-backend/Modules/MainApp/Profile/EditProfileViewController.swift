@@ -425,7 +425,7 @@ class EditProfileViewController: UIViewController {
     private func handleEditName() {
         let editNameVC = EditNameViewController()
         editNameVC.currentName = currentName
-        editNameVC.currentGender = currentGender
+        //editNameVC.currentGender = currentGender
         editNameVC.onNameUpdated = { [weak self] in
             self?.onProfileUpdated?()
         }
