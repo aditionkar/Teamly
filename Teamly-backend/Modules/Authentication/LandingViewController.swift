@@ -342,7 +342,7 @@ class LandingViewController: UIViewController {
 
             if let sheet = registerVC.sheetPresentationController {
                 let registerDetent = UISheetPresentationController.Detent.custom { context in
-                    return 650
+                    return 490
                 }
                 sheet.detents = [registerDetent]
                 sheet.prefersGrabberVisible = true
@@ -355,7 +355,7 @@ class LandingViewController: UIViewController {
 
         if let sheet = loginVC.sheetPresentationController {
             let loginDetent = UISheetPresentationController.Detent.custom { context in
-                return 580
+                return 420
             }
             sheet.detents = [loginDetent]
             sheet.prefersGrabberVisible = true

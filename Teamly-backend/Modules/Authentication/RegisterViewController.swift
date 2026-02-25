@@ -20,13 +20,6 @@ class RegisterViewController: UIViewController {
     private let passwordTextField = UITextField()
     private let confirmPasswordTextField = UITextField()
     private let signUpButton = UIButton(type: .system)
-    private let orSeparatorView = UIView()
-    private let orLabel = UILabel()
-    private let socialButtonsStackView = UIStackView()
-    private let googleButton = UIButton(type: .system)
-    private let appleButton = UIButton(type: .system)
-    private var appleImageView = UIImageView()
-    private let googleImageView = UIImageView()
     private let loginLabel = UILabel()
     private let loginButton = UIButton(type: .system)
     
@@ -57,8 +50,6 @@ class RegisterViewController: UIViewController {
         setupPasswordTextField()
         setupConfirmPasswordTextField()
         setupSignUpButton()
-        setupOrSeparator()
-        setupSocialButtons()
         setupLoginSection()
     }
     
@@ -148,100 +139,6 @@ class RegisterViewController: UIViewController {
         contentView.addSubview(signUpButton)
     }
     
-    private func setupOrSeparator() {
-        orLabel.text = "OR"
-        orLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        orLabel.textAlignment = .center
-        contentView.addSubview(orSeparatorView)
-        contentView.addSubview(orLabel)
-    }
-    
-    private func setupSocialButtons() {
-        socialButtonsStackView.axis = .horizontal
-        socialButtonsStackView.distribution = .equalSpacing
-        socialButtonsStackView.alignment = .center
-        socialButtonsStackView.spacing = 60
-        contentView.addSubview(socialButtonsStackView)
-        
-        // Apple Button Container
-        let appleContainer = UIView()
-        appleContainer.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .tertiaryDark : .tertiaryLight
-        appleContainer.layer.cornerRadius = 15
-        appleContainer.layer.borderWidth = 1.0
-        appleContainer.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.quaternaryDark : UIColor.quaternaryLight).cgColor
-        appleContainer.layer.masksToBounds = true
-        
-        // Apple Button
-        appleButton.backgroundColor = .clear
-        appleButton.addTarget(self, action: #selector(appleTapped), for: .touchUpInside)
-        
-        let appleImageName = traitCollection.userInterfaceStyle == .dark ? "AppleDark" : "AppleLight"
-        appleImageView = UIImageView(image: UIImage(named: appleImageName))
-        appleImageView.contentMode = .scaleAspectFit
-        appleImageView.translatesAutoresizingMaskIntoConstraints = false
-        
-        appleContainer.addSubview(appleButton)
-        appleButton.addSubview(appleImageView)
-        
-        // Google Button Container
-        let googleContainer = UIView()
-        googleContainer.backgroundColor = traitCollection.userInterfaceStyle == .dark ? .tertiaryDark : .tertiaryLight
-        googleContainer.layer.cornerRadius = 15
-        googleContainer.layer.borderWidth = 1.0
-        googleContainer.layer.borderColor = (traitCollection.userInterfaceStyle == .dark ? UIColor.quaternaryDark : UIColor.quaternaryLight).cgColor
-        googleContainer.layer.masksToBounds = true
-        
-        // Google Button
-        googleButton.backgroundColor = .clear
-        googleButton.addTarget(self, action: #selector(googleTapped), for: .touchUpInside)
-        
-        let googleImageView = UIImageView(image: UIImage(named: "Google"))
-        googleImageView.contentMode = .scaleAspectFit
-        googleImageView.translatesAutoresizingMaskIntoConstraints = false
-        
-        googleContainer.addSubview(googleButton)
-        googleButton.addSubview(googleImageView)
-        
-        socialButtonsStackView.addArrangedSubview(appleContainer)
-        socialButtonsStackView.addArrangedSubview(googleContainer)
-        
-        // Set constraints for containers
-        appleContainer.translatesAutoresizingMaskIntoConstraints = false
-        googleContainer.translatesAutoresizingMaskIntoConstraints = false
-        appleButton.translatesAutoresizingMaskIntoConstraints = false
-        googleButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        NSLayoutConstraint.activate([
-            // Container constraints (100x100)
-            appleContainer.widthAnchor.constraint(equalToConstant: 100),
-            appleContainer.heightAnchor.constraint(equalToConstant: 90),
-            googleContainer.widthAnchor.constraint(equalToConstant: 100),
-            googleContainer.heightAnchor.constraint(equalToConstant: 90),
-            
-            // Button fills the container
-            appleButton.topAnchor.constraint(equalTo: appleContainer.topAnchor),
-            appleButton.leadingAnchor.constraint(equalTo: appleContainer.leadingAnchor),
-            appleButton.trailingAnchor.constraint(equalTo: appleContainer.trailingAnchor),
-            appleButton.bottomAnchor.constraint(equalTo: appleContainer.bottomAnchor),
-            
-            googleButton.topAnchor.constraint(equalTo: googleContainer.topAnchor),
-            googleButton.leadingAnchor.constraint(equalTo: googleContainer.leadingAnchor),
-            googleButton.trailingAnchor.constraint(equalTo: googleContainer.trailingAnchor),
-            googleButton.bottomAnchor.constraint(equalTo: googleContainer.bottomAnchor),
-            
-            // Image constraints (60x60, centered)
-            appleImageView.centerXAnchor.constraint(equalTo: appleButton.centerXAnchor),
-            appleImageView.centerYAnchor.constraint(equalTo: appleButton.centerYAnchor),
-            appleImageView.widthAnchor.constraint(equalToConstant: 55),
-            appleImageView.heightAnchor.constraint(equalToConstant: 55),
-            
-            googleImageView.centerXAnchor.constraint(equalTo: googleButton.centerXAnchor),
-            googleImageView.centerYAnchor.constraint(equalTo: googleButton.centerYAnchor, constant: 6),
-            googleImageView.widthAnchor.constraint(equalToConstant: 60),
-            googleImageView.heightAnchor.constraint(equalToConstant: 60)
-        ])
-    }
-    
     private func setupLoginSection() {
         loginLabel.text = "Already a member? "
         loginLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
@@ -262,9 +159,6 @@ class RegisterViewController: UIViewController {
         passwordTextField.translatesAutoresizingMaskIntoConstraints = false
         confirmPasswordTextField.translatesAutoresizingMaskIntoConstraints = false
         signUpButton.translatesAutoresizingMaskIntoConstraints = false
-        orSeparatorView.translatesAutoresizingMaskIntoConstraints = false
-        orLabel.translatesAutoresizingMaskIntoConstraints = false
-        socialButtonsStackView.translatesAutoresizingMaskIntoConstraints = false
         loginLabel.translatesAutoresizingMaskIntoConstraints = false
         loginButton.translatesAutoresizingMaskIntoConstraints = false
         
@@ -311,24 +205,8 @@ class RegisterViewController: UIViewController {
             signUpButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
             signUpButton.heightAnchor.constraint(equalToConstant: 50),
             
-            // OR Separator
-            orSeparatorView.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: 30),
-            orSeparatorView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40),
-            orSeparatorView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40),
-            orSeparatorView.heightAnchor.constraint(equalToConstant: 1),
-            
-            // OR Label
-            orLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            orLabel.centerYAnchor.constraint(equalTo: orSeparatorView.centerYAnchor),
-            orLabel.widthAnchor.constraint(equalToConstant: 60),
-            
-            // Social Buttons Stack View
-            socialButtonsStackView.topAnchor.constraint(equalTo: orSeparatorView.bottomAnchor, constant: 30),
-            socialButtonsStackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            socialButtonsStackView.heightAnchor.constraint(equalToConstant: 100),
-            
             // Login section
-            loginLabel.topAnchor.constraint(equalTo: socialButtonsStackView.bottomAnchor, constant: 30),
+            loginLabel.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: 30),
             loginLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor, constant: -38),
             loginLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
             
@@ -365,30 +243,8 @@ class RegisterViewController: UIViewController {
         // Update placeholder attributes
         updateTextFieldPlaceholders()
         
-        // Update OR separator
-        orSeparatorView.backgroundColor = isDarkMode ?
-            UIColor.primaryWhite.withAlphaComponent(0.3) :
-            UIColor.primaryBlack.withAlphaComponent(0.3)
-        
-        // Update OR label
-        orLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        orLabel.backgroundColor = isDarkMode ? .secondaryDark : .secondaryLight
-        
         // Update login label
         loginLabel.textColor = isDarkMode ? .primaryWhite : .primaryBlack
-        
-        if let appleContainer = socialButtonsStackView.arrangedSubviews.first as? UIView,
-               let googleContainer = socialButtonsStackView.arrangedSubviews.last as? UIView {
-                appleContainer.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
-                appleContainer.layer.borderColor = (isDarkMode ? UIColor.quaternaryDark : UIColor.quaternaryLight).cgColor
-                
-                googleContainer.backgroundColor = isDarkMode ? .tertiaryDark : .tertiaryLight
-                googleContainer.layer.borderColor = (isDarkMode ? UIColor.quaternaryDark : UIColor.quaternaryLight).cgColor
-            
-            // Update Apple image based on mode
-            let appleImageName = isDarkMode ? "AppleDark" : "AppleLight"
-            appleImageView.image = UIImage(named: appleImageName)
-            }
     }
     
     private func updateTextFieldPlaceholders() {
@@ -529,14 +385,6 @@ class RegisterViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         self.present(alert, animated: true)
-    }
-    
-    @objc private func googleTapped() {
-        print("Google sign up tapped")
-    }
-    
-    @objc private func appleTapped() {
-        print("Apple sign up tapped")
     }
     
     @objc private func loginTapped() {
